@@ -15,20 +15,9 @@
     return santa;
   }
 
-  function createPeekSanta() {
-    const SANTA_ID = "santa-peek";
+  let santaBusy = false;
 
-    let santa = document.getElementById(SANTA_ID);
-    if (!santa) {
-      santa = document.createElement("img");
-      santa.id = SANTA_ID;
-      santa.src = chrome.runtime.getURL("images/peek-santa.png");
-      document.body.appendChild(santa);
-    }
-    return santa;
-  }
-
-  function walkSantaAcrossScreen() {
+  function walkSantaAcrossScreen(onDone) {
     const santa = createSanta();
     const rect = santa.getBoundingClientRect();
     const santaWidth = rect.width || 120;
@@ -73,6 +62,7 @@
         requestAnimationFrame(step);
       } else {
         santa.style.left = "-200px";
+        onDone?.(); // 🔓
       }
     }
 
@@ -87,23 +77,6 @@
       santa.src = chrome.runtime.getURL("images/peek-santa.png");
       santa.style.position = "fixed";
       santa.style.bottom = "15%";
-      santa.style.right = "-220px"; // start off-screen
-      santa.style.width = "200px";
-      santa.style.height = "auto";
-      santa.style.zIndex = "2147483647";
-      santa.style.pointerEvents = "none";
-      document.body.appendChild(santa);
-    }
-    return santa;
-  }
-  function createPeekSanta() {
-    let santa = document.getElementById("santa-peek");
-    if (!santa) {
-      santa = document.createElement("img");
-      santa.id = "santa-peek";
-      santa.src = chrome.runtime.getURL("images/peek_santa.png");
-      santa.style.position = "fixed";
-      santa.style.bottom = "15%";
       santa.style.width = "200px";
       santa.style.height = "auto";
       santa.style.zIndex = "2147483647";
@@ -113,7 +86,9 @@
     return santa;
   }
 
-  function peekSantaFromSide() {
+  let lastPeekSide = null; // "left" | "right"
+
+  function peekSantaFromSide(onDone) {
     const santa = createPeekSanta();
 
     // prevent the "barely appears then retreats" issue
@@ -125,8 +100,17 @@
     const hidden = -220; // fully off-screen
     const shown = -50; // hugs the edge (compensates for PNG padding)
 
-    const fromLeft = Math.random() < 0.5;
+    // Keep alternating sides if possible. Avoid too many same-side peeks in a row.
+    const fromLeft =
+      lastPeekSide === "left"
+        ? false
+        : lastPeekSide === "right"
+        ? true
+        : Math.random() < 0.5;
 
+    lastPeekSide = fromLeft ? "left" : "right";
+
+    let animate;
     if (fromLeft) {
       // LEFT side: animate LEFT property
       santa.style.left = hidden + "px";
@@ -135,7 +119,7 @@
       // Flip so he faces into the page (optional but looks better)
       santa.style.transform = "scaleX(-1)";
 
-      santa.animate(
+      animate = santa.animate(
         [
           { left: hidden + "px" },
           { left: shown + "px" },
@@ -151,7 +135,7 @@
 
       santa.style.transform = "scaleX(1)";
 
-      santa.animate(
+      animate = santa.animate(
         [
           { right: hidden + "px" },
           { right: shown + "px" },
@@ -161,24 +145,51 @@
         { duration, easing: "ease-in-out", fill: "forwards" }
       );
     }
+    if (animate) {
+      animate.onfinish = () => onDone?.();
+      animate.oncancel = () => onDone?.(); // safety: if canceled, still unlock
+    } else {
+      onDone?.();
+    }
   }
 
   function scheduleSanta() {
-    const min = 10_000; // 1 minute
-    const max = 20_000; // 5 minutes
+    const walkMin = 360_000,
+      walkMax = 900_000;
+    const peekMin = 120_000,
+      peekMax = 360_000;
+
+    // choose a delay *type* now, but choose the action later only if free
+    const planWalk = Math.random() < 0.2;
+    const min = planWalk ? walkMin : peekMin;
+    const max = planWalk ? walkMax : peekMax;
+
     const delay = Math.random() * (max - min) + min;
-    console.log(`Sant will be walking in ${delay} ms`);
 
     setTimeout(() => {
-      if (document.visibilityState === "visible") {
-        console.log("Here comes Santa!");
-        // 50/50 chance to walk or peek
-        //   if (Math.random() < 0.1) {
-        //     walkSantaAcrossScreen();
-        //   } else {
-        peekSantaFromSide();
-        //   }
+      if (document.visibilityState !== "visible") {
+        scheduleSanta();
+        return;
       }
+
+      if (santaBusy) {
+        setTimeout(scheduleSanta, 3000); // try again in 3s
+        return;
+      }
+
+      santaBusy = true;
+
+      // use the planned type (so timing matches behavior)
+      if (planWalk) {
+        walkSantaAcrossScreen(() => {
+          santaBusy = false;
+        });
+      } else {
+        peekSantaFromSide(() => {
+          santaBusy = false;
+        });
+      }
+
       scheduleSanta();
     }, delay);
   }

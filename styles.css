@@ -1,13 +1,12 @@
 #santa-walker {
   position: fixed;
   bottom: 0;
-  left: -200px;  
+  left: -200px;
   width: 120px;
   height: auto;
   z-index: 2147483647;
   pointer-events: none;
 }
-
 
 /* Base Santa styling (you already have something like this) */
 #santa-walker {
@@ -68,9 +67,8 @@
 
 #santa-peek {
   position: fixed;
-  bottom: 15%;           /* vertical position */
-  right: -220px;         /* fully off-screen to the right */
-  width: 200px;          /* tweak size as you like */
+  bottom: 15%;
+  width: 200px;
   height: auto;
   z-index: 2147483647;
   pointer-events: none;
