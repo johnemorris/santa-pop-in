@@ -1,7 +1,7 @@
 (function () {
-  const SANTA_ID = "santa-walker";
 
 function createSanta() {
+  const SANTA_ID = "santa-walker";
   let santa = document.getElementById(SANTA_ID);
   if (!santa) {
     santa = document.createElement("img");
@@ -16,7 +16,20 @@ function createSanta() {
   return santa;
 }
 
-function walkSanta() {
+function createPeekSanta() {
+    const SANTA_ID = "santa-peek";
+
+  let santa = document.getElementById(SANTA_ID);
+  if (!santa) {
+    santa = document.createElement("img");
+    santa.id = SANTA_ID;
+    santa.src = chrome.runtime.getURL("images/peek-santa.png");
+    document.body.appendChild(santa);
+  }
+  return santa;
+}
+
+function walkSantaAcrossScreen() {
   const santa = createSanta();
   const rect = santa.getBoundingClientRect();
   const santaWidth = rect.width || 120;
@@ -67,7 +80,52 @@ function walkSanta() {
   requestAnimationFrame(step);
 }
 
+function createPeekSanta() {
+  let santa = document.getElementById("santa-peek");
+  if (!santa) {
+    santa = document.createElement("img");
+    santa.id = "santa-peek";
+    santa.src = chrome.runtime.getURL("images/peek-santa.png");
+    santa.style.position = "fixed";
+    santa.style.bottom = "15%";
+    santa.style.right = "-220px";  // start off-screen
+    santa.style.width = "200px";
+    santa.style.height = "auto";
+    santa.style.zIndex = "2147483647";
+    santa.style.pointerEvents = "none";
+    document.body.appendChild(santa);
+  }
+  return santa;
+}
 
+function peekSantaFromSide() {
+  const santa = createPeekSanta();
+
+  const hiddenRight = -220;  // fully hidden
+  const shownRight  = -50;   // nicely peeking, close to edge
+
+  // ensure starting at hidden position
+  santa.style.right = hiddenRight + "px";
+
+  // 🚫 cancel any previous animations on this element
+  santa.getAnimations().forEach(a => a.cancel());
+
+  const duration = 6500; // 6.5 seconds total
+
+  santa.animate(
+    [
+      { right: hiddenRight + "px" }, // off-screen
+      { right: shownRight + "px" },  // slide in
+      { right: shownRight + "px" },  // hold visible
+      { right: hiddenRight + "px" }  // slide back out
+    ],
+    {
+      duration,
+      easing: "ease-in-out",
+      fill: "forwards"
+    }
+  );
+}
 
   function scheduleSanta() {
     const min = 10_000;   // 1 minute
@@ -75,12 +133,18 @@ function walkSanta() {
     const delay = Math.random() * (max - min) + min;
 console.log(`Sant will be walking in ${delay} ms`);
 
-    setTimeout(() => {
-      if (document.visibilityState === "visible") {
-        walkSanta();
-      }
-      scheduleSanta();
-    }, delay);
+  setTimeout(() => {
+    if (document.visibilityState === "visible") {
+        console.log("Here comes Santa!");
+      // 50/50 chance to walk or peek
+    //   if (Math.random() < 0.1) {
+    //     walkSantaAcrossScreen();
+    //   } else {
+        peekSantaFromSide();
+    //   }
+    }
+    scheduleSanta();
+  }, delay); 
   }
 
   scheduleSanta();

@@ -18,7 +18,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["images/santa.png"],
+      "resources": ["images/santa.png", "images/peek-santa.png"],
       "matches": ["<all_urls>"]
     }
   ]

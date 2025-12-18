@@ -7,3 +7,71 @@
   z-index: 2147483647;
   pointer-events: none;
 }
+
+
+/* Base Santa styling (you already have something like this) */
+#santa-walker {
+  position: fixed;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+/* Peek from left */
+#santa-walker.peek-left {
+  bottom: 20%; /* middle-ish, tweak as you like */
+  left: -140px;
+  right: auto;
+  transform-origin: left center;
+  animation: santa-peek-left 4s ease-in-out forwards;
+}
+
+/* Peek from right */
+#santa-walker.peek-right {
+  bottom: 20%;
+  right: -140px;
+  left: auto;
+  transform-origin: right center;
+  animation: santa-peek-right 4s ease-in-out forwards;
+}
+
+/* LEFT side peek */
+@keyframes santa-peek-left {
+  0% {
+    transform: translateX(0) scale(1);
+  }
+  30% {
+    transform: translateX(120px) scale(1); /* fully visible */
+  }
+  60% {
+    transform: translateX(120px) scale(1); /* stay and stare */
+  }
+  100% {
+    transform: translateX(0) scale(1); /* back off-screen */
+  }
+}
+
+/* RIGHT side peek */
+@keyframes santa-peek-right {
+  0% {
+    transform: translateX(0) scaleX(-1) scaleY(1); /* flipped to face inward */
+  }
+  30% {
+    transform: translateX(-120px) scaleX(-1) scaleY(1);
+  }
+  60% {
+    transform: translateX(-120px) scaleX(-1) scaleY(1);
+  }
+  100% {
+    transform: translateX(0) scaleX(-1) scaleY(1);
+  }
+}
+
+#santa-peek {
+  position: fixed;
+  bottom: 15%;           /* vertical position */
+  right: -220px;         /* fully off-screen to the right */
+  width: 200px;          /* tweak size as you like */
+  height: auto;
+  z-index: 2147483647;
+  pointer-events: none;
+}
