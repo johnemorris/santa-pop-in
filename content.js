@@ -4,10 +4,13 @@
     let santa = document.getElementById(SANTA_ID);
     if (!santa) {
       santa = document.createElement("img");
+      santa.style.position = "fixed";
+      santa.style.zIndex = "2147483647";
+      santa.style.pointerEvents = "none";
+
       santa.id = SANTA_ID;
 
       const url = chrome.runtime.getURL("images/santa.png");
-      console.log("Santa image URL:", url); // <-- should NOT be chrome-extension://invalid/
 
       santa.src = url;
       document.body.appendChild(santa);
@@ -17,8 +20,27 @@
 
   let santaBusy = false;
 
+  let walkAnimating = false;
+
   function walkSantaAcrossScreen(onDone) {
+    if (walkAnimating) return;
+    walkAnimating = true;
+
+    let doneCalled = false;
+    const doneOnce = () => {
+      if (doneCalled) return;
+      doneCalled = true;
+      walkAnimating = false;
+      onDone?.();
+    };
+
     const santa = createSanta();
+
+    // Make walker reliable on any site
+    santa.style.position = "fixed";
+    santa.style.zIndex = "2147483647";
+    santa.style.pointerEvents = "none";
+
     const rect = santa.getBoundingClientRect();
     const santaWidth = rect.width || 120;
     const santaHeight = rect.height || 120;
@@ -26,9 +48,9 @@
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
 
-    // Random vertical position: anywhere from bottom up to ~80% of the screen
-    const maxBottom = Math.max(0, screenHeight - santaHeight - 20); // leave 20px padding
-    const bottomOffset = Math.floor(Math.random() * (maxBottom * 0.8)); // 0 → ~80% of max
+    // Random vertical position (near bottom → up to ~80% of usable height)
+    const maxBottom = Math.max(0, screenHeight - santaHeight - 20);
+    const bottomOffset = Math.floor(Math.random() * (maxBottom * 0.8));
     santa.style.bottom = `${bottomOffset}px`;
 
     // Random direction
@@ -37,8 +59,8 @@
     let startX = -santaWidth;
     let endX = screenWidth + santaWidth;
 
-    // Random size between 0.8x and 1.2x
-    const scale = 0.4 + Math.random() * 1.2;
+    // Random size (tune as you like)
+    const scale = 0.8 + Math.random() * 0.4; // 0.8–1.2
 
     if (!leftToRight) {
       [startX, endX] = [endX, startX];
@@ -55,14 +77,15 @@
     function step(now) {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / duration, 1);
+
       const currentX = startX + (endX - startX) * t;
       santa.style.left = `${currentX}px`;
 
       if (t < 1) {
         requestAnimationFrame(step);
       } else {
-        santa.style.left = "-200px";
-        onDone?.(); // 🔓
+        santa.style.left = "-300px";
+        doneOnce();
       }
     }
 
@@ -91,16 +114,20 @@
   function peekSantaFromSide(onDone) {
     const santa = createPeekSanta();
 
-    // prevent the "barely appears then retreats" issue
+    // cancel any previous peek animation
     santa.getAnimations().forEach((a) => a.cancel());
 
+    let doneCalled = false;
+    const doneOnce = () => {
+      if (doneCalled) return;
+      doneCalled = true;
+      onDone?.();
+    };
+
     const duration = 6500;
+    const hidden = -220;
+    const shown = -50;
 
-    // Tune these two numbers (you already like shownRight = -50)
-    const hidden = -220; // fully off-screen
-    const shown = -50; // hugs the edge (compensates for PNG padding)
-
-    // Keep alternating sides if possible. Avoid too many same-side peeks in a row.
     const fromLeft =
       lastPeekSide === "left"
         ? false
@@ -110,16 +137,14 @@
 
     lastPeekSide = fromLeft ? "left" : "right";
 
-    let animate;
+    let anim;
+
     if (fromLeft) {
-      // LEFT side: animate LEFT property
       santa.style.left = hidden + "px";
       santa.style.right = "auto";
-
-      // Flip so he faces into the page (optional but looks better)
       santa.style.transform = "scaleX(-1)";
 
-      animate = santa.animate(
+      anim = santa.animate(
         [
           { left: hidden + "px" },
           { left: shown + "px" },
@@ -129,13 +154,11 @@
         { duration, easing: "ease-in-out", fill: "forwards" }
       );
     } else {
-      // RIGHT side: animate RIGHT property
       santa.style.right = hidden + "px";
       santa.style.left = "auto";
-
       santa.style.transform = "scaleX(1)";
 
-      animate = santa.animate(
+      anim = santa.animate(
         [
           { right: hidden + "px" },
           { right: shown + "px" },
@@ -145,21 +168,21 @@
         { duration, easing: "ease-in-out", fill: "forwards" }
       );
     }
-    if (animate) {
-      animate.onfinish = () => onDone?.();
-      animate.oncancel = () => onDone?.(); // safety: if canceled, still unlock
+
+    if (anim) {
+      anim.onfinish = doneOnce;
+      anim.oncancel = doneOnce;
     } else {
-      onDone?.();
+      doneOnce();
     }
   }
 
   function scheduleSanta() {
-    const walkMin = 360_000,
-      walkMax = 900_000;
-    const peekMin = 120_000,
-      peekMax = 360_000;
+    const walkMin = 36_000,
+      walkMax = 90_000;
+    const peekMin = 12_000,
+      peekMax = 36_000;
 
-    // choose a delay *type* now, but choose the action later only if free
     const planWalk = Math.random() < 0.2;
     const min = planWalk ? walkMin : peekMin;
     const max = planWalk ? walkMax : peekMax;
@@ -173,24 +196,22 @@
       }
 
       if (santaBusy) {
-        setTimeout(scheduleSanta, 3000); // try again in 3s
+        setTimeout(scheduleSanta, 3000);
         return;
       }
 
       santaBusy = true;
 
-      // use the planned type (so timing matches behavior)
-      if (planWalk) {
-        walkSantaAcrossScreen(() => {
-          santaBusy = false;
-        });
-      } else {
-        peekSantaFromSide(() => {
-          santaBusy = false;
-        });
-      }
+      const done = () => {
+        santaBusy = false;
+        scheduleSanta(); // ✅ schedule next only AFTER completion
+      };
 
-      scheduleSanta();
+      if (planWalk) {
+        walkSantaAcrossScreen(done);
+      } else {
+        peekSantaFromSide(done);
+      }
     }, delay);
   }
 
