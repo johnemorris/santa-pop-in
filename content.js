@@ -13,23 +13,42 @@
       const url = chrome.runtime.getURL("images/santa.png");
 
       santa.src = url;
+      santa.style.width = "120px"; // ✅ force size even if PNG is huge
+      santa.style.height = "auto";
+      santa.style.left = "-9999px";
       document.body.appendChild(santa);
     }
     return santa;
   }
 
+  const KEY = "santaEnabled";
+  let santaEnabled = true;
+  let santaTimerId = null;
   let santaBusy = false;
-
   let walkAnimating = false;
+  let walkAbortToken = 0; // increments to cancel an in-flight walk
+  let walkRafId = null; // current requestAnimationFrame id
+  let walkFailsafeId = null; // current failsafe timeout id
 
   function walkSantaAcrossScreen(onDone) {
     if (walkAnimating) return;
     walkAnimating = true;
 
+    // capture a token for THIS run
+    const myToken = ++walkAbortToken;
+
     let doneCalled = false;
     const doneOnce = () => {
       if (doneCalled) return;
       doneCalled = true;
+
+      // cleanup timers/raf
+      if (walkRafId) cancelAnimationFrame(walkRafId);
+      walkRafId = null;
+
+      if (walkFailsafeId) clearTimeout(walkFailsafeId);
+      walkFailsafeId = null;
+
       walkAnimating = false;
       onDone?.();
     };
@@ -48,33 +67,43 @@
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
 
-    // Random vertical position (near bottom → up to ~80% of usable height)
     const maxBottom = Math.max(0, screenHeight - santaHeight - 20);
     const bottomOffset = Math.floor(Math.random() * (maxBottom * 0.8));
     santa.style.bottom = `${bottomOffset}px`;
 
-    // Random direction
     const leftToRight = Math.random() > 0.5;
 
     let startX = -santaWidth;
     let endX = screenWidth + santaWidth;
 
-    // Random size (tune as you like)
-    const scale = 0.8 + Math.random() * 0.4; // 0.8–1.2
+    const scale = 0.8 + Math.random() * 0.4;
 
     if (!leftToRight) {
       [startX, endX] = [endX, startX];
-      santa.style.transform = `scale(-${scale}, ${scale})`; // flipped horizontally
+      santa.style.transform = `scale(-${scale}, ${scale})`;
     } else {
       santa.style.transform = `scale(${scale}, ${scale})`;
     }
 
     santa.style.left = `${startX}px`;
 
-    const duration = 15000; // 15s
+    const duration = 15000;
     const startTime = performance.now();
 
+    // ✅ failsafe stored globally so stopSantaNow can clear it too
+    walkFailsafeId = setTimeout(() => {
+      santa.style.left = "-9999px";
+      doneOnce();
+    }, duration + 1000);
+
     function step(now) {
+      // ✅ if toggle happened, abort immediately
+      if (myToken !== walkAbortToken || !santaEnabled) {
+        santa.style.left = "-9999px";
+        doneOnce();
+        return;
+      }
+
       const elapsed = now - startTime;
       const t = Math.min(elapsed / duration, 1);
 
@@ -82,14 +111,14 @@
       santa.style.left = `${currentX}px`;
 
       if (t < 1) {
-        requestAnimationFrame(step);
+        walkRafId = requestAnimationFrame(step);
       } else {
-        santa.style.left = "-300px";
+        santa.style.left = "-9999px";
         doneOnce();
       }
     }
 
-    requestAnimationFrame(step);
+    walkRafId = requestAnimationFrame(step);
   }
 
   function createPeekSanta() {
@@ -118,9 +147,17 @@
     santa.getAnimations().forEach((a) => a.cancel());
 
     let doneCalled = false;
+    let failsafe;
     const doneOnce = () => {
       if (doneCalled) return;
       doneCalled = true;
+
+      if (failsafe) clearTimeout(failsafe);
+
+      // ✅ hide regardless of whether left or right was used
+      santa.style.left = "-9999px";
+      santa.style.right = "auto";
+
       onDone?.();
     };
 
@@ -177,7 +214,58 @@
     }
   }
 
+  function stopSantaNow() {
+    // ✅ abort any in-flight walk loop
+    walkAbortToken++;
+
+    if (walkRafId) {
+      cancelAnimationFrame(walkRafId);
+      walkRafId = null;
+    }
+    if (walkFailsafeId) {
+      clearTimeout(walkFailsafeId);
+      walkFailsafeId = null;
+    } // stop future scheduling
+    if (santaTimerId) {
+      clearTimeout(santaTimerId);
+      santaTimerId = null;
+    }
+
+    santaBusy = false;
+
+    // cancel animations + hide any existing Santas
+    const walker = document.getElementById("santa-walker");
+    if (walker) {
+      walker.getAnimations().forEach((a) => a.cancel());
+
+      // Force fully hidden + neutral state
+      walker.style.left = "-9999px";
+      walker.style.right = "auto";
+      walker.style.top = "auto";
+      walker.style.bottom = "0px";
+      walker.style.transform = "none";
+    }
+
+    const peek = document.getElementById("santa-peek");
+    if (peek) {
+      peek.getAnimations().forEach((a) => a.cancel());
+      peek.style.left = "-9999px";
+      peek.style.right = "auto";
+    }
+  }
+
   function scheduleSanta() {
+    // ✅ prevent duplicate schedules
+    if (santaTimerId) {
+      clearTimeout(santaTimerId);
+      santaTimerId = null;
+    }
+
+    if (!santaEnabled) {
+      stopSantaNow();
+      return;
+    }
+
     const walkMin = 36_000,
       walkMax = 90_000;
     const peekMin = 12_000,
@@ -189,14 +277,25 @@
 
     const delay = Math.random() * (max - min) + min;
 
-    setTimeout(() => {
+    santaTimerId = setTimeout(() => {
+      santaTimerId = null; // timer fired
+
+      // re-check enabled at execution time
+      if (!santaEnabled) {
+        stopSantaNow();
+        return;
+      }
+
       if (document.visibilityState !== "visible") {
         scheduleSanta();
         return;
       }
 
       if (santaBusy) {
-        setTimeout(scheduleSanta, 3000);
+        santaTimerId = setTimeout(() => {
+          santaTimerId = null;
+          scheduleSanta();
+        }, 3000);
         return;
       }
 
@@ -215,5 +314,20 @@
     }, delay);
   }
 
-  scheduleSanta();
+  chrome.storage.sync.get({ [KEY]: true }, (data) => {
+    santaEnabled = Boolean(data[KEY]);
+    if (santaEnabled) scheduleSanta();
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "sync") return;
+    if (!changes[KEY]) return;
+
+    santaEnabled = Boolean(changes[KEY].newValue);
+
+    stopSantaNow();
+    if (santaEnabled) {
+      scheduleSanta(); // start a clean schedule
+    }
+  });
 })();

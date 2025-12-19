@@ -3,6 +3,11 @@
   "name": "Santa Walker",
   "description": "A tiny Santa who occasionally walks across your screen while you browse.",
   "version": "1.0.0",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Santa Walker"
+  },
   "icons": {
     "16": "images/icon16.png",
     "48": "images/icon48.png",

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 12px;
+        width: 220px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .title {
+        font-weight: 700;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 12px;
+        opacity: 0.7;
+        line-height: 1.3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <div class="title">🎅 Santa Walker</div>
+      <label>
+        <input id="toggle" type="checkbox" />
+        On
+      </label>
+    </div>
+
+    <div class="hint">
+      Toggle Santa on/off. Changes apply instantly to open tabs.
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
