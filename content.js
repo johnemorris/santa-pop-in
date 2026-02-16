@@ -266,10 +266,10 @@
       return;
     }
 
-    const walkMin = 36_000,
-      walkMax = 90_000;
-    const peekMin = 12_000,
-      peekMax = 36_000;
+    const walkMin = 360_000,
+      walkMax = 900_000;
+    const peekMin = 120_000,
+      peekMax = 360_000;
 
     const planWalk = Math.random() < 0.2;
     const min = planWalk ? walkMin : peekMin;
