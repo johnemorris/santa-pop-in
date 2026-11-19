@@ -15,5 +15,6 @@ const SANTA_FREQ_TEXT = {
   5: "about every minute",
 };
 
-// Set this to your Ko-fi / Buy Me a Coffee page to show the tip link.
-const SANTA_TIP_URL = "";
+// Tip jar (jem6 Ko-fi). Set to "" to hide the coffee link.
+const SANTA_TIP_URL = "https://ko-fi.com/jem6com";
+const SANTA_BRAND_URL = "https://jem6.com";

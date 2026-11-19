@@ -14,6 +14,13 @@ button { font: inherit; padding: 4px 9px; border: 1px solid #e5e7eb; border-radi
 button:hover { background: #fef2f2; border-color: #fca5a5; }
 #tryMsg { min-height: 14px; margin-top: 6px; }
 section.off { opacity: .45; pointer-events: none; }
-footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f3f4f6; text-align: center; }
-footer a { color: #6b7280; text-decoration: none; font-size: 12px; }
-footer a:hover { color: #c1121f; }
+footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f3f4f6;
+         display: flex; flex-direction: column; align-items: center; gap: 8px; }
+footer a { text-decoration: none; }
+.tip { display: inline-block; padding: 5px 12px; border-radius: 999px; background: #fff7ed;
+       border: 1px solid #fed7aa; color: #9a3412; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tip:hover { background: #ffedd5; }
+.brand { display: inline-flex; align-items: center; gap: 6px; color: #64748b; font-size: 11px; }
+.brand b { color: #0f172a; letter-spacing: .02em; }
+.brand:hover b { color: #0284c7; }
+[hidden] { display: none !important; }

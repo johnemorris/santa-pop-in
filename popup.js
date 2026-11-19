@@ -54,5 +54,6 @@ document.querySelectorAll("[data-try]").forEach((btn) =>
 
 if (SANTA_TIP_URL) {
   $("#tipLink").href = SANTA_TIP_URL;
-  $("#tip").hidden = false;
+  $("#tipLink").hidden = false;
 }
+$("#brandLink").href = SANTA_BRAND_URL;
