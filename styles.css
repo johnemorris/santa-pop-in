@@ -1,6 +1,2 @@
-#santa-walker,
-#santa-peek {
-  position: fixed;
-  z-index: 2147483647;
-  pointer-events: none;
-}
+/* Santa renders inside a Shadow DOM (see content.js); this only guards the host element. */
+santa-pop-in { all: initial; }

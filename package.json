@@ -1,10 +1,9 @@
 {
-  "name": "santa-walker",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "santa-pop-in",
+  "version": "1.1.0",
+  "description": "Santa Pop-In Chrome extension",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "zip": "bash scripts/build-zip.sh"
   },
   "keywords": [],
   "author": "",
