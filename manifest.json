@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Santa Pop-In",
-  "description": "A tiny Santa who pops in now and then: peeks, strolls, sleigh rides, candy canes, and a snow cloud you can click.",
-  "version": "1.1.0",
+  "description": "A tiny Santa who pops in now and then: peeks, strolls, sleigh rides, candy canes, a snow cloud, and a leaf blower to clear the drifts.",
+  "version": "1.2.0",
   "permissions": [
     "storage"
   ],
@@ -37,7 +37,8 @@
       "resources": [
         "images/santa-walk.webp",
         "images/peek-santa.webp",
-        "images/sleigh.webp"
+        "images/sleigh.webp",
+        "images/santa-blower.webp"
       ],
       "matches": [
         "<all_urls>"

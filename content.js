@@ -16,6 +16,7 @@
       cloud: true,
       canes: true,
       dance: true,
+      blower: true,
     },
   };
 
@@ -50,28 +51,42 @@
   const CSS = `
     :host { all: initial; }
     .layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-    .actor { position: fixed; left: 0; will-change: transform; }
+    .actor { position: fixed; left: 0; will-change: transform; z-index: 2; }
     img, svg { display: block; max-width: none; max-height: none; user-select: none;
                -webkit-user-drag: none; border: 0; }
     .click { pointer-events: auto; cursor: pointer; }
-    .waddle { animation: waddle 0.55s ease-in-out infinite; transform-origin: 50% 100%; }
-    .gallop { animation: gallop 0.32s ease-in-out infinite; }
-    .bob    { animation: bob 3s ease-in-out infinite; }
+    .waddle { animation: waddle 0.62s cubic-bezier(.45,0,.55,1) infinite; transform-origin: 50% 100%; }
+    .gallop { animation: gallop 0.36s ease-in-out infinite; transform-origin: 60% 80%; }
+    .bob    { animation: bob 3.4s ease-in-out infinite; }
+    .rumble { animation: rumble 0.09s linear infinite; }
     @keyframes waddle {
-      0%, 100% { transform: translateY(0) rotate(-2.5deg); }
-      50%      { transform: translateY(-6px) rotate(2.5deg); }
+      0%, 100% { transform: translateY(0) rotate(-3deg) scale(1.01, .99); }
+      25%      { transform: translateY(-7px) rotate(0deg) scale(.99, 1.02); }
+      50%      { transform: translateY(0) rotate(3deg) scale(1.01, .99); }
+      75%      { transform: translateY(-7px) rotate(0deg) scale(.99, 1.02); }
     }
     @keyframes gallop {
       0%, 100% { transform: translateY(0) rotate(0); }
-      50%      { transform: translateY(-4px) rotate(-0.6deg); }
+      50%      { transform: translateY(-5px) rotate(-1deg); }
     }
     @keyframes bob {
-      0%, 100% { transform: translateY(0); }
-      50%      { transform: translateY(-5px); }
+      0%, 100% { transform: translateY(0) scale(1); }
+      50%      { transform: translateY(-6px) scale(1.03, .98); }
     }
+    @keyframes rumble {
+      0%, 100% { transform: translate(0, 0); }
+      50%      { transform: translate(.6px, -.5px); }
+    }
+    .shadow { position: absolute; left: 12%; right: 12%; bottom: -5px; height: 10px;
+              border-radius: 50%; background: radial-gradient(closest-side, rgba(20,30,50,.28), transparent);
+              pointer-events: none; }
     .note { position: fixed; font: 700 20px/1 system-ui, sans-serif; color: #c1121f;
-            text-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: none; }
-    canvas.snow { position: fixed; left: 0; top: 0; pointer-events: none; }
+            text-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: none; z-index: 3; }
+    .spark { position: fixed; width: 6px; height: 6px; pointer-events: none; z-index: 1;
+             background: radial-gradient(closest-side, #fff8d6, rgba(255,215,90,.8) 45%, transparent);
+             border-radius: 50%; }
+    canvas.snow { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 1; }
+    .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
   `;
 
   function ensureStage() {
@@ -106,6 +121,9 @@
     });
   }
 
+  // A soft contact shadow so walkers feel planted on the ground.
+  const addShadow = (actor) => el("div", { className: "shadow" }, actor);
+
   // ------------------------------------------------------------ click dance
   const NOTES = ["♪", "♫", "♬"];
 
@@ -120,37 +138,41 @@
         });
         n.animate(
           [
-            { transform: "translate(0,0) rotate(0)", opacity: 1 },
+            { transform: "translate(0,0) rotate(0) scale(.6)", opacity: 0 },
+            { transform: "translate(0,-12px) rotate(0) scale(1)", opacity: 1, offset: 0.15 },
             {
-              transform: `translate(${rand(-40, 40)}px,-90px) rotate(${rand(-30, 30)}deg)`,
+              transform: `translate(${rand(-40, 40)}px,-95px) rotate(${rand(-30, 30)}deg) scale(1.1)`,
               opacity: 0,
             },
           ],
-          { duration: 1400, easing: "ease-out" }
+          { duration: 1500, easing: "ease-out" }
         ).onfinish = () => n.remove();
-      }, i * 260);
+      }, i * 240);
     }
   }
 
   const DANCE_FRAMES = [
-    { transform: "translateY(0) rotate(0) scaleX(1)" },
-    { transform: "translateY(-14px) rotate(-12deg) scaleX(1)", offset: 0.1 },
-    { transform: "translateY(0) rotate(12deg) scaleX(1)", offset: 0.2 },
-    { transform: "translateY(-14px) rotate(-12deg) scaleX(1)", offset: 0.3 },
-    { transform: "translateY(0) rotate(12deg) scaleX(1)", offset: 0.4 },
-    { transform: "translateY(-34px) rotate(0) scaleX(1)", offset: 0.52 },
-    { transform: "translateY(-34px) rotate(0) scaleX(-1)", offset: 0.62 },
-    { transform: "translateY(0) rotate(0) scaleX(-1)", offset: 0.72 },
-    { transform: "translateY(-12px) rotate(0) scaleX(1)", offset: 0.84 },
-    { transform: "translateY(0) rotate(0) scaleX(1)" },
+    { transform: "translateY(0) rotate(0) scale(1,1)" },
+    { transform: "translateY(2px) rotate(0) scale(1.06,.92)", offset: 0.05 },
+    { transform: "translateY(-16px) rotate(-12deg) scale(.97,1.04)", offset: 0.13 },
+    { transform: "translateY(0) rotate(12deg) scale(1.04,.96)", offset: 0.23 },
+    { transform: "translateY(-16px) rotate(-12deg) scale(.97,1.04)", offset: 0.33 },
+    { transform: "translateY(0) rotate(12deg) scale(1.04,.96)", offset: 0.43 },
+    { transform: "translateY(3px) rotate(0) scale(1.08,.9)", offset: 0.48 },
+    { transform: "translateY(-38px) rotate(0) scale(.96,1.05)", offset: 0.58 },
+    { transform: "translateY(-38px) rotate(0) scale(-.96,1.05)", offset: 0.66 },
+    { transform: "translateY(0) rotate(0) scale(-1.06,.93)", offset: 0.76 },
+    { transform: "translateY(-12px) rotate(0) scale(.98,1.02)", offset: 0.87 },
+    { transform: "translateY(0) rotate(0) scale(1,1)" },
   ];
 
   const HOP_FRAMES = [
-    { transform: "translateY(0)" },
-    { transform: "translateY(-22px)", offset: 0.25 },
-    { transform: "translateY(0)", offset: 0.5 },
-    { transform: "translateY(-12px)", offset: 0.75 },
-    { transform: "translateY(0)" },
+    { transform: "translateY(0) scale(1,1)" },
+    { transform: "translateY(2px) scale(1.05,.94)", offset: 0.1 },
+    { transform: "translateY(-24px) scale(.97,1.04)", offset: 0.3 },
+    { transform: "translateY(0) scale(1.04,.96)", offset: 0.5 },
+    { transform: "translateY(-12px) scale(1,1)", offset: 0.72 },
+    { transform: "translateY(0) scale(1,1)" },
   ];
 
   // Clicking an actor pauses its trip, plays a little routine, then carries on.
@@ -194,17 +216,18 @@
     const fall = Math.max(0, ground - y);
     const spin = Math.random() < 0.5 ? -1 : 1;
     const land = 80 * spin;
+    const drift = rand(-30, 30);
     cane
       .animate(
         [
-          { transform: "translateY(0) rotate(0)" },
-          { transform: `translateY(${fall}px) rotate(${land + 140 * spin}deg)`, offset: 0.6 },
-          { transform: `translateY(${fall - 18}px) rotate(${land + 40 * spin}deg)`, offset: 0.75 },
-          { transform: `translateY(${fall}px) rotate(${land}deg)`, offset: 0.9 },
-          { transform: `translateY(${fall - 4}px) rotate(${land}deg)`, offset: 0.95 },
-          { transform: `translateY(${fall}px) rotate(${land}deg)` },
+          { transform: "translate(0,0) rotate(0)", easing: "cubic-bezier(.5,0,1,1)" },
+          { transform: `translate(${drift}px,${fall}px) rotate(${land + 140 * spin}deg)`, offset: 0.6, easing: "ease-out" },
+          { transform: `translate(${drift * 1.1}px,${fall - 18}px) rotate(${land + 40 * spin}deg)`, offset: 0.75, easing: "ease-in" },
+          { transform: `translate(${drift * 1.2}px,${fall}px) rotate(${land}deg)`, offset: 0.9 },
+          { transform: `translate(${drift * 1.2}px,${fall - 4}px) rotate(${land}deg)`, offset: 0.95 },
+          { transform: `translate(${drift * 1.2}px,${fall}px) rotate(${land}deg)` },
         ],
-        { duration: 1300, easing: "ease-in", fill: "forwards" }
+        { duration: 1500, fill: "forwards" }
       )
       .onfinish = () => {
         setTimeout(() => {
@@ -239,19 +262,35 @@
       className: "actor",
       style: `bottom:15%;${fromLeft ? "left:0" : "left:auto;right:0"};`,
     });
-    const body = el("img", { src: url("images/peek-santa.webp"), alt: "", style: "width:200px;height:auto;" }, actor);
+    const body = el("img", { src: url("images/peek-santa.webp"), alt: "", style: "width:200px;height:auto;transform-origin:50% 90%;" }, actor);
     const flip = fromLeft ? " scaleX(-1)" : "";
     const hidden = fromLeft ? -220 : 220;
     const shown = fromLeft ? -50 : 50;
+    const peekOut = fromLeft ? -150 : 150; // first, a cautious half-peek
     const trip = actor.animate(
       [
-        { transform: `translateX(${hidden}px)${flip}` },
-        { transform: `translateX(${shown}px)${flip}`, offset: 0.22 },
-        { transform: `translateX(${shown}px)${flip}`, offset: 0.78 },
+        { transform: `translateX(${hidden}px)${flip}`, easing: "ease-out" },
+        { transform: `translateX(${peekOut}px)${flip}`, offset: 0.1, easing: "ease-in" },
+        { transform: `translateX(${peekOut}px)${flip}`, offset: 0.18, easing: "cubic-bezier(.34,1.56,.64,1)" },
+        { transform: `translateX(${shown}px)${flip}`, offset: 0.3 },
+        { transform: `translateX(${shown}px)${flip}`, offset: 0.78, easing: "cubic-bezier(.55,0,.75,.2)" },
         { transform: `translateX(${hidden}px)${flip}` },
       ],
-      { duration: 6500, easing: "ease-in-out", fill: "forwards" }
+      { duration: 7000, fill: "forwards" }
     );
+    // A little curious head-tilt while he's out.
+    sleep(3000, signal).then(() => {
+      if (signal.aborted || !body.isConnected || body.getAnimations().length) return;
+      body.animate(
+        [
+          { transform: "rotate(0)" },
+          { transform: "rotate(-7deg)", offset: 0.3 },
+          { transform: "rotate(4deg)", offset: 0.65 },
+          { transform: "rotate(0)" },
+        ],
+        { duration: 1400, easing: "ease-in-out" }
+      );
+    });
     makeDanceable(actor, body, () => trip, HOP_FRAMES, 1300);
     await played(trip, signal);
     actor.remove();
@@ -267,6 +306,7 @@
     const duration = ((W + width + 20) / 85) * 1000; // ~85 px/s stroll
 
     const actor = el("div", { className: "actor", style: `bottom:${4 + Snow.heightAt(W / 2) * 0.5}px;` });
+    addShadow(actor);
     const body = el("img", { className: "waddle", src: url("images/santa-walk.webp"), alt: "", style: `width:${width}px;height:auto;` }, actor);
     const trip = actor.animate(
       [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
@@ -279,87 +319,199 @@
     actor.remove();
   }
 
+  // Twinkling trail behind the sleigh.
+  function sparkle(x, y) {
+    const s = el("div", { className: "spark", style: `left:${x}px;top:${y}px;` });
+    s.animate(
+      [
+        { transform: "scale(.4)", opacity: 0.95 },
+        { transform: `translate(${rand(-6, 6)}px,${rand(8, 22)}px) scale(${rand(0.8, 1.4)})`, opacity: 0 },
+      ],
+      { duration: rand(700, 1200), easing: "ease-out" }
+    ).onfinish = () => s.remove();
+  }
+
   async function actSleigh(signal) {
     const W = window.innerWidth;
+    const H = window.innerHeight;
     const width = Math.round(Math.min(320, W * 0.28));
     const ltr = Math.random() < 0.5;
+    const dir = ltr ? 1 : -1;
     const flip = ltr ? "" : " scaleX(-1)";
     const from = ltr ? -width - 10 : W + 10;
     const to = ltr ? W + 10 : -width - 10;
     const duration = ((W + width + 20) / 210) * 1000; // reindeer are quick
+    const lift = Math.min(170, H * 0.24) * rand(0.7, 1);
+
+    // Run along the ground, take off in a gentle arc, glide back down.
+    const N = 24;
+    const frames = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const x = from + (to - from) * t;
+      const arc = t < 0.12 ? 0 : Math.sin(Math.PI * Math.min(1, (t - 0.12) / 0.8));
+      const y = -lift * Math.pow(Math.max(0, arc), 1.4);
+      const slope = Math.cos(Math.PI * Math.min(1, Math.max(0, (t - 0.12) / 0.8)));
+      const tilt = t < 0.12 || t > 0.92 ? 0 : -dir * 7 * slope;
+      frames.push({ transform: `translate(${x}px,${y}px) rotate(${tilt}deg)${flip}`, offset: t });
+    }
 
     const actor = el("div", { className: "actor", style: `bottom:${6 + Snow.heightAt(W / 2) * 0.5}px;` });
     const body = el("img", { className: "gallop", src: url("images/sleigh.webp"), alt: "", style: `width:${width}px;height:auto;` }, actor);
-    const trip = actor.animate(
-      [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
-      { duration, easing: "linear", fill: "forwards" }
-    );
+    const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
     makeDanceable(actor, body, () => trip, HOP_FRAMES, 1100);
     scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, Math.random() < 0.5 ? 1 : 0);
+
+    const trail = setInterval(() => {
+      if (!actor.isConnected || trip.playState !== "running") return;
+      const r = actor.getBoundingClientRect();
+      if (r.bottom > H - 8 - 0.05 * r.height && trip.currentTime < duration * 0.14) return; // still on the ground
+      sparkle(ltr ? r.left + r.width * 0.06 : r.right - r.width * 0.06, r.top + r.height * rand(0.55, 0.8));
+    }, 70);
     await played(trip, signal);
+    clearInterval(trail);
     actor.remove();
   }
 
-  const CLOUD_SVG = `<svg width="96" height="58" viewBox="0 0 96 58" xmlns="http://www.w3.org/2000/svg">
-    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9e4f2"/></linearGradient></defs>
-    <path d="M22 52 C8 52 4 40 12 34 C8 22 22 14 32 20 C36 6 58 4 64 18 C76 12 90 22 84 34 C94 38 90 52 78 52 Z"
-      fill="url(#cg)" stroke="#9fb3cc" stroke-width="2"/>
-  </svg>`;
+  // A soft, layered cloud with a slightly grey underside.
+  let cloudSeq = 0;
+  function cloudSVG() {
+    const id = `cg${++cloudSeq}`;
+    return `<svg width="120" height="70" viewBox="0 0 120 70" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f1f5fb"/><stop offset="1" stop-color="#c9d6e6"/>
+        </linearGradient>
+      </defs>
+      <g fill="url(#${id})">
+        <circle cx="34" cy="40" r="20"/><circle cx="58" cy="30" r="25"/><circle cx="84" cy="38" r="20"/>
+        <circle cx="20" cy="50" r="13"/><circle cx="100" cy="50" r="13"/>
+        <rect x="20" y="42" width="80" height="21" rx="10.5"/>
+      </g>
+      <g fill="#ffffff" opacity=".8"><circle cx="52" cy="20" r="9"/><circle cx="30" cy="31" r="6"/></g>
+    </svg>`;
+  }
 
   async function actCloud(signal) {
     const W = window.innerWidth;
     const ltr = Math.random() < 0.5;
-    const from = ltr ? -110 : W + 10;
-    const to = ltr ? W + 10 : -110;
+    const from = ltr ? -130 : W + 10;
+    const to = ltr ? W + 10 : -130;
     const actor = el("div", {
-      className: "actor",
-      style: `top:${rand(6, 16)}vh;filter:drop-shadow(0 3px 4px rgba(40,60,90,.18));`,
+      className: "actor click",
+      title: "Click for a flurry",
+      style: `top:${rand(6, 14)}vh;filter:drop-shadow(0 4px 6px rgba(40,60,90,.16));opacity:.96;`,
     });
-    const body = el("div", { className: "bob", title: "Let it snow!" }, actor);
-    body.innerHTML = CLOUD_SVG;
-    actor.classList.add("click");
+    const body = el("div", { className: "bob" }, actor);
+    body.innerHTML = cloudSVG();
     const trip = actor.animate(
       [{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }],
-      { duration: ((W + 120) / 28) * 1000, easing: "linear", fill: "forwards" } // a lazy drift
+      { duration: ((W + 140) / 30) * 1000, easing: "linear", fill: "forwards" } // a lazy drift
     );
+
+    // Light snow falls only from under the cloud, for as long as it's on screen.
+    const span = () => {
+      if (!actor.isConnected) return null;
+      const r = actor.getBoundingClientRect();
+      return { x0: r.left + r.width * 0.18, x1: r.right - r.width * 0.18, y: r.bottom - 10 };
+    };
+    const emitter = Snow.emit(span, 7);
+
+    let flurry = false;
     actor.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (trip.playState !== "running") {
-        Snow.start(12000);
-        return;
-      }
-      trip.pause();
-      actor.style.filter = "drop-shadow(0 3px 4px rgba(40,60,90,.18)) saturate(.6) brightness(.93)";
-      await Snow.start(22000);
-      actor.style.filter = "drop-shadow(0 3px 4px rgba(40,60,90,.18))";
-      if (trip.playState === "paused") trip.play();
+      e.preventDefault();
+      if (flurry) return;
+      flurry = true;
+      emitter.rate = 26;
+      trip.updatePlaybackRate(0.5);
+      body.animate([{ filter: "brightness(1)" }, { filter: "brightness(.9)" }], { duration: 600, fill: "forwards" });
+      await sleep(10000, signal);
+      emitter.rate = 7;
+      trip.updatePlaybackRate(1);
+      body.animate([{ filter: "brightness(.9)" }, { filter: "brightness(1)" }], { duration: 800, fill: "forwards" });
+      flurry = false;
     });
     await played(trip, signal);
+    emitter.stop();
     actor.remove();
   }
 
-  const ACTS = { peek: actPeek, walk: actWalk, sleigh: actSleigh, cloud: actCloud };
+  // Santa wanders out with a (silent!) leaf blower and clears the snow.
+  let blowing = false;
+  async function actBlower(signal, fromX) {
+    if (blowing) return;
+    blowing = true;
+    try {
+      const W = window.innerWidth;
+      const width = Math.round(150 * rand(0.95, 1.08));
+      // Start from the side nearest the click so that pile goes first.
+      const ltr = fromX == null ? Math.random() < 0.5 : fromX < W / 2;
+      const flip = ltr ? "" : " scaleX(-1)";
+      const from = ltr ? -width - 10 : W + 10;
+      const to = ltr ? W + 40 : -width - 40;
+      const duration = ((W + width + 50) / 120) * 1000;
+
+      const actor = el("div", { className: "actor", style: "bottom:2px;" });
+      addShadow(actor);
+      const shaker = el("div", { className: "rumble" }, actor);
+      const body = el("img", { className: "waddle", src: url("images/santa-blower.webp"), alt: "", style: `width:${width}px;height:auto;` }, shaker);
+      const trip = actor.animate(
+        [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
+        { duration, easing: "linear", fill: "forwards" }
+      );
+      makeDanceable(actor, body, () => trip, HOP_FRAMES, 1200);
+
+      // The nozzle trails behind him (image's left edge, 86% down when facing right).
+      Snow.setBlower(() => {
+        if (!actor.isConnected || trip.playState !== "running") return null;
+        const r = body.getBoundingClientRect();
+        return { x: ltr ? r.left : r.right, y: r.top + r.height * 0.86, dir: ltr ? -1 : 1 };
+      });
+      await played(trip, signal);
+      Snow.setBlower(null);
+      Snow.fadePile(); // tidy any crumbs he missed
+      actor.remove();
+    } finally {
+      blowing = false;
+    }
+  }
+
+  const ACTS = { peek: actPeek, walk: actWalk, sleigh: actSleigh, cloud: actCloud, blower: actBlower };
+
+  // Clicking the snow pile: Santa comes to clear it (or it just melts away).
+  function onPileClick(x) {
+    if (blowing) return;
+    if (settings.santaActs.blower) {
+      // Runs alongside whatever else is on screen; it isn't a scheduled act.
+      actBlower(new AbortController().signal, x).catch(() => {});
+    } else {
+      Snow.fadePile();
+    }
+  }
 
   // --------------------------------------------------------------------- snow
-  // Flakes fall, land, and pile up along the bottom: deeper toward the
-  // corners. The pile melts away a few minutes after the snow stops.
+  // Faint flakes fall only from under a passing cloud, land, and pile up along
+  // the bottom, deeper toward the corners. The pile stays until it's clicked.
   const Snow = (() => {
     const COL = 4; // px per height column
+    const HIT = 40; // px per clickable pile segment
     let canvas, ctx, W = 0, H = 0, dpr = 1;
     let heights = new Float32Array(0);
     let flakes = [];
-    let snowUntil = 0;
+    let puffs = [];
+    let emitters = [];
+    let blower = null;
     let raf = null, last = 0;
-    let meltTimer = null, melting = false;
-    let waiters = [];
+    let fading = false;
+    let hits = [], hitsDirty = false, hitsTimer = null;
 
     function edge(x) {
       const e = Math.min(1, Math.abs(x / W - 0.5) * 2);
       return e * e * e;
     }
-    const cap = (x) => 14 + 70 * edge(x);
-    const weight = (x) => 0.5 + 4 * edge(x);
+    const cap = (x) => 8 + 44 * edge(x);
+    const weight = (x) => 0.45 + 3.6 * edge(x);
 
     function ensure() {
       if (canvas && canvas.isConnected) return;
@@ -384,6 +536,7 @@
       } else if (!heights.length) heights = new Float32Array(n);
       W = nW; H = nH;
       draw();
+      markHits();
     }
 
     function heightAt(x) {
@@ -392,15 +545,17 @@
       return heights[i];
     }
 
+    const hasPile = () => heights.some((h) => h > 0.3);
+
     function deposit(x, amount) {
       const c = Math.floor(x / COL);
       const spread = [0.25, 0.6, 1, 0.6, 0.25];
       for (let k = -2; k <= 2; k++) {
         const i = c + k;
         if (i < 0 || i >= heights.length) continue;
-        const lim = cap(i * COL);
-        heights[i] = Math.min(lim, heights[i] + amount * spread[k + 2]);
+        heights[i] = Math.min(cap(i * COL), heights[i] + amount * spread[k + 2]);
       }
+      markHits();
     }
 
     function settle() {
@@ -414,17 +569,47 @@
       }
     }
 
+    // Clickable strips over the top of the pile. Only where there's real snow,
+    // and only a thin band, so the page underneath stays usable.
+    function markHits() {
+      hitsDirty = true;
+      if (!hitsTimer) hitsTimer = setTimeout(rebuildHits, 300);
+    }
+    function rebuildHits() {
+      hitsTimer = null;
+      if (!hitsDirty) return;
+      hitsDirty = false;
+      hits.forEach((h) => h.remove());
+      hits = [];
+      if (!layer || !layer.isConnected || !W) return;
+      for (let x = 0; x < W; x += HIT) {
+        let top = 0;
+        for (let i = Math.floor(x / COL); i < Math.min(heights.length, Math.floor((x + HIT) / COL)); i++)
+          top = Math.max(top, heights[i]);
+        if (top < 4) continue;
+        const h = el("div", {
+          className: "pilehit",
+          title: settings.santaActs.blower ? "Click to call Santa and his leaf blower" : "Click to clear the snow",
+          style: `left:${x}px;width:${HIT}px;height:${Math.min(top, 18)}px;bottom:${Math.max(0, top - 18)}px;`,
+        });
+        h.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onPileClick(x + HIT / 2);
+        });
+        hits.push(h);
+      }
+    }
+
     function draw() {
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
-      let any = false;
-      for (let i = 0; i < heights.length; i++) if (heights[i] > 0.3) { any = true; break; }
-      if (any) {
+      if (hasPile()) {
         const top = Math.max(...heights);
         const g = ctx.createLinearGradient(0, H - top, 0, H);
-        g.addColorStop(0, "#ffffff");
-        g.addColorStop(1, "#dde8f4");
+        g.addColorStop(0, "rgba(255,255,255,.95)");
+        g.addColorStop(1, "rgba(226,234,245,.92)");
         ctx.beginPath();
         ctx.moveTo(0, H);
         for (let i = 0; i < heights.length; i++) ctx.lineTo(i * COL, H - heights[i]);
@@ -437,106 +622,194 @@
           const y = H - heights[i];
           i ? ctx.lineTo(i * COL, y) : ctx.moveTo(0, y);
         }
-        ctx.strokeStyle = "rgba(120,150,190,.45)";
-        ctx.lineWidth = 1.2;
+        ctx.save();
+        ctx.shadowColor = "rgba(90,120,160,.35)";
+        ctx.shadowBlur = 4;
+        ctx.strokeStyle = "rgba(130,155,190,.5)";
+        ctx.lineWidth = 1;
         ctx.stroke();
+        ctx.restore();
       }
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "rgba(120,145,180,.55)";
-      ctx.lineWidth = 0.8;
+      // Falling flakes: small and see-through so they don't pull your eye.
       for (const f of flakes) {
+        ctx.globalAlpha = f.a;
+        ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = f.a * 0.35;
+        ctx.strokeStyle = "#8ea3c0";
+        ctx.lineWidth = 0.6;
         ctx.stroke();
       }
+      // Snow kicked up by the blower, and the wind streaks.
+      for (const p of puffs) {
+        const k = Math.max(0, 1 - p.age / p.life);
+        ctx.globalAlpha = k * p.a;
+        if (p.streak) {
+          ctx.strokeStyle = "#9fb4cf";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x - p.vx * 0.06, p.y - p.vy * 0.06);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#a9bbd3";
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r * (1 + p.age), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
     }
 
     function tick(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (now < snowUntil && flakes.length < 260) {
-        const rate = W / 9; // flakes per second
-        let n = rate * dt;
+
+      for (const em of emitters) {
+        const s = em.span();
+        if (!s || s.x1 < 0 || s.x0 > W) continue;
+        let n = em.rate * dt;
         while (n > 0) {
-          if (Math.random() < n) {
+          if (Math.random() < n && flakes.length < 220) {
             flakes.push({
-              x: Math.random() * W, y: -6, r: rand(1.4, 3.4),
-              vy: rand(45, 85), phase: Math.random() * 6.28, sway: rand(10, 28),
+              x: rand(s.x0, s.x1), y: s.y, r: rand(0.8, 2), a: rand(0.35, 0.65),
+              vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(8, 20),
             });
           }
           n -= 1;
         }
       }
+
       for (let i = flakes.length - 1; i >= 0; i--) {
         const f = flakes[i];
-        f.phase += dt * 1.6;
+        f.phase += dt * 1.5;
         f.y += f.vy * dt;
         f.x += Math.sin(f.phase) * f.sway * dt;
         if (f.y >= H - heightAt(f.x) - f.r) {
-          if (f.x >= 0 && f.x <= W) deposit(f.x, f.r * 1.0 * weight(f.x));
+          if (f.x >= 0 && f.x <= W) deposit(f.x, f.r * 1.6 * weight(f.x));
           flakes.splice(i, 1);
         }
       }
+
+      const b = blower && blower();
+      if (b) {
+        // Blast the snow just behind the nozzle and toss it away.
+        const reach = 110;
+        const a = b.dir < 0 ? b.x - reach : b.x - 8;
+        const z = b.dir < 0 ? b.x + 8 : b.x + reach;
+        let moved = 0;
+        for (let i = Math.max(0, Math.floor(a / COL)); i <= Math.min(heights.length - 1, Math.floor(z / COL)); i++) {
+          const take = Math.min(heights[i], 160 * dt + heights[i] * 4 * dt);
+          heights[i] -= take;
+          moved += take;
+        }
+        if (moved > 0) markHits();
+        const kick = Math.min(14, moved * 0.5);
+        for (let k = 0; k < kick; k++) {
+          puffs.push({
+            x: rand(a, z), y: H - rand(0, 10), r: rand(1, 2.6), a: rand(0.5, 0.85),
+            vx: b.dir * rand(140, 380), vy: -rand(40, 170), age: 0, life: rand(0.8, 1.6),
+          });
+        }
+        if (Math.random() < dt * 22) {
+          puffs.push({
+            streak: true, x: b.x, y: b.y + rand(-4, 6), a: 0.45,
+            vx: b.dir * rand(380, 520), vy: rand(-20, 30), age: 0, life: rand(0.25, 0.45),
+          });
+        }
+      }
+
+      for (let i = puffs.length - 1; i >= 0; i--) {
+        const p = puffs[i];
+        p.age += dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (!p.streak) { p.vy += 120 * dt; p.vx *= 1 - 1.2 * dt; }
+        if (p.age >= p.life) puffs.splice(i, 1);
+      }
+
       settle();
       draw();
-      if (now < snowUntil || flakes.length) {
+      if (emitters.length || flakes.length || puffs.length || blower) {
         raf = requestAnimationFrame(tick);
       } else {
         raf = null;
-        waiters.splice(0).forEach((w) => w());
-        scheduleMelt();
       }
     }
 
-    function scheduleMelt() {
-      clearTimeout(meltTimer);
-      meltTimer = setTimeout(melt, 3 * 60 * 1000);
-    }
-
-    function melt() {
-      melting = true;
-      const step = () => {
-        if (!melting) return;
-        let left = 0;
-        for (let i = 0; i < heights.length; i++) {
-          heights[i] = Math.max(0, heights[i] - 0.12 - heights[i] * 0.004);
-          left += heights[i];
-        }
-        draw();
-        if (left > 0) meltTimer = setTimeout(step, 120);
-        else melting = false;
-      };
-      step();
-    }
-
-    function start(ms) {
+    function wake() {
       ensure();
-      melting = false;
-      clearTimeout(meltTimer);
-      snowUntil = Math.max(snowUntil, performance.now() + ms);
       if (!raf) {
         last = performance.now();
         raf = requestAnimationFrame(tick);
       }
-      return new Promise((resolve) => waiters.push(resolve));
+    }
+
+    // A source of falling snow. span() returns {x0, x1, y} or null.
+    function emit(span, rate) {
+      const em = { span, rate, stop: () => (emitters = emitters.filter((e) => e !== em)) };
+      emitters.push(em);
+      fading = false;
+      wake();
+      return em;
+    }
+
+    function setBlower(fn) {
+      blower = fn;
+      if (fn) wake();
+    }
+
+    // Gently melt whatever is left (used after the blower, or when it's off).
+    function fadePile() {
+      if (fading || !hasPile()) return;
+      fading = true;
+      const step = () => {
+        if (!fading) return;
+        let left = 0;
+        for (let i = 0; i < heights.length; i++) {
+          heights[i] = Math.max(0, heights[i] - 0.25 - heights[i] * 0.03);
+          left += heights[i];
+        }
+        draw();
+        markHits();
+        if (left > 0) setTimeout(step, 40);
+        else fading = false;
+      };
+      step();
+    }
+
+    // Seed a pile instantly (for the popup's "Try" button when there's no snow yet).
+    function seed() {
+      ensure();
+      for (let i = 0; i < heights.length; i++) heights[i] = Math.max(heights[i], cap(i * COL) * 0.55);
+      draw();
+      markHits();
     }
 
     function clear() {
-      snowUntil = 0;
       flakes = [];
-      melting = false;
-      clearTimeout(meltTimer);
+      puffs = [];
+      emitters = [];
+      blower = null;
+      fading = false;
       if (raf) cancelAnimationFrame(raf);
       raf = null;
       heights.fill(0);
-      waiters.splice(0).forEach((w) => w());
+      clearTimeout(hitsTimer);
+      hitsTimer = null;
+      hits.forEach((h) => h.remove());
+      hits = [];
       canvas?.remove();
       canvas = ctx = null;
     }
 
     window.addEventListener("resize", resize);
-    return { start, clear, heightAt };
+    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile };
   })();
 
   // ---------------------------------------------------------------- scheduler
@@ -645,8 +918,10 @@
   // "Try it now" buttons in the popup.
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type !== "santa-summon") return;
-    if (msg.act === "snow") Snow.start(15000);
-    else if (ACTS[msg.act]) run(msg.act);
+    if (msg.act === "blower") {
+      if (!Snow.hasPile()) Snow.seed();
+      onPileClick(null);
+    } else if (ACTS[msg.act]) run(msg.act);
     reply({ ok: true });
   });
 })();
