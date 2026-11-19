@@ -1,0 +1,19 @@
+body { font: 13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+       margin: 0; padding: 12px 14px; width: 250px; color: #1f2937; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.title { font-weight: 700; font-size: 14px; }
+.label { margin: 14px 0 6px; font-weight: 600; }
+.muted { color: #6b7280; }
+.small { font-size: 11px; }
+input[type="range"] { width: 100%; margin: 0; accent-color: #c1121f; }
+input[type="checkbox"] { accent-color: #c1121f; }
+.acts label { display: flex; gap: 8px; align-items: center; padding: 3px 0; cursor: pointer; }
+.try { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; padding: 4px 9px; border: 1px solid #e5e7eb; border-radius: 6px;
+         background: #fff; cursor: pointer; }
+button:hover { background: #fef2f2; border-color: #fca5a5; }
+#tryMsg { min-height: 14px; margin-top: 6px; }
+section.off { opacity: .45; pointer-events: none; }
+footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f3f4f6; text-align: center; }
+footer a { color: #6b7280; text-decoration: none; font-size: 12px; }
+footer a:hover { color: #c1121f; }
