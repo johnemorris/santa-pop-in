@@ -24,3 +24,6 @@ footer a { text-decoration: none; }
 .brand b { color: #0f172a; letter-spacing: .02em; }
 .brand:hover b { color: #0284c7; }
 [hidden] { display: none !important; }
+
+.acts label.sub { padding-left: 22px; }
+.acts label.dim { opacity: .5; }

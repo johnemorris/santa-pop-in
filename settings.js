@@ -4,6 +4,7 @@ const SANTA_DEFAULTS = {
   santaEnabled: true,
   santaFreq: 3,
   santaActs: { peek: true, walk: true, sleigh: true, cloud: true, canes: true, dance: true, blower: true },
+  santaDecor: { lights: false, blink: true, trees: false },
 };
 
 // Popup wording for each slider step (minutes of visible tab time).

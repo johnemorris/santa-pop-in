@@ -18,6 +18,8 @@
       dance: true,
       blower: true,
     },
+    // Always-on decorations: off until you turn them on.
+    santaDecor: { lights: false, blink: true, trees: false },
   };
 
   // Minutes of *visible* tab time between appearances, per slider step.
@@ -87,6 +89,17 @@
              border-radius: 50%; }
     canvas.snow { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 1; }
     .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
+    .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    .tree { position: fixed; bottom: -6px; height: min(230px, 30vh); width: auto; opacity: .97;
+            filter: drop-shadow(0 2px 4px rgba(30,50,70,.18)); }
+    .tree.l { left: 0; transform: translateX(-50%); }
+    .tree.r { right: 0; transform: translateX(50%); }
+    svg.lights { position: fixed; left: 0; top: 0; overflow: visible; }
+    .bulb { transform-box: fill-box; transform-origin: center; }
+    .blink .bulb { animation: twinkle 2.4s ease-in-out infinite; }
+    .blink .k1 { animation-delay: -.6s; } .blink .k2 { animation-delay: -1.2s; } .blink .k3 { animation-delay: -1.8s; }
+    @keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) { .blink .bulb { animation: none; } }
   `;
 
   function ensureStage() {
@@ -402,6 +415,9 @@
     </svg>`;
   }
 
+  // Snow per second for each click count: 1 click hides the cloud, then the
+  // more you click before stopping, the harder it snows (light ... blizzard).
+  const CLOUD_RATES = [7, 0, 16, 28, 45, 70, 100, 140];
   async function actCloud(signal) {
     const W = window.innerWidth;
     const ltr = Math.random() < 0.5;
@@ -409,8 +425,8 @@
     const to = ltr ? W + 10 : -130;
     const actor = el("div", {
       className: "actor click",
-      title: "Click for a flurry",
-      style: `top:${rand(6, 14)}vh;filter:drop-shadow(0 4px 6px rgba(40,60,90,.16));opacity:.96;`,
+      title: "Click once to send the cloud away. Click several times for more snow.",
+      style: `top:${rand(6, 14)}vh;filter:drop-shadow(0 4px 6px rgba(40,60,90,.12));opacity:.62;`,
     });
     const body = el("div", { className: "bob" }, actor);
     body.innerHTML = cloudSVG();
@@ -423,28 +439,49 @@
     const span = () => {
       if (!actor.isConnected) return null;
       const r = actor.getBoundingClientRect();
-      return { x0: r.left + r.width * 0.18, x1: r.right - r.width * 0.18, y: r.bottom - 10 };
+      return { x0: r.left + r.width * 0.15, x1: r.right - r.width * 0.15, y: r.bottom - 10 };
     };
-    const emitter = Snow.emit(span, 7);
+    const emitter = Snow.emit(span, CLOUD_RATES[0]);
 
-    let flurry = false;
-    actor.addEventListener("click", async (e) => {
+    let clicks = 0, burst = null, level = 0, dismissed = false;
+    actor.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (flurry) return;
-      flurry = true;
-      emitter.rate = 26;
-      trip.updatePlaybackRate(0.5);
-      body.animate([{ filter: "brightness(1)" }, { filter: "brightness(.9)" }], { duration: 600, fill: "forwards" });
-      await sleep(10000, signal);
-      emitter.rate = 7;
-      trip.updatePlaybackRate(1);
-      body.animate([{ filter: "brightness(.9)" }, { filter: "brightness(1)" }], { duration: 800, fill: "forwards" });
-      flurry = false;
+      if (dismissed) return;
+      clicks++;
+      body.animate([{ transform: "scale(1)" }, { transform: "scale(.94)" }, { transform: "scale(1)" }], { duration: 180 });
+      clearTimeout(burst);
+      burst = setTimeout(() => {
+        const n = clicks;
+        clicks = 0;
+        if (n === 1 && level === 0) {
+          // One click: it's in the way, so it fades off.
+          dismissed = true;
+          emitter.stop();
+          actor.style.pointerEvents = "none";
+          actor.animate([{ opacity: 0.62 }, { opacity: 0 }], { duration: 700, fill: "forwards" })
+            .onfinish = () => trip.finish();
+          return;
+        }
+        // Several clicks: snow harder (each new burst adds on), and keep dumping all the way across.
+        level = Math.min(CLOUD_RATES.length - 1, level ? level + n : n);
+        emitter.rate = CLOUD_RATES[level];
+        trip.updatePlaybackRate(level >= 5 ? 0.55 : 0.75);
+        const dark = 1 - level * 0.04;
+        body.animate([{ filter: `brightness(${dark})` }], { duration: 600, fill: "forwards" });
+        actor.style.opacity = String(Math.min(0.8, 0.62 + level * 0.03));
+      }, 450);
     });
     await played(trip, signal);
+    clearTimeout(burst);
     emitter.stop();
     actor.remove();
+
+    // Santa always comes next to clear whatever fell.
+    if (!dismissed && !signal.aborted && settings.santaActs.blower) {
+      await sleep(1500, signal);
+      if (!signal.aborted && Snow.hasPile()) await actBlower(signal, null);
+    }
   }
 
   // Santa wanders out with a (silent!) leaf blower and clears the snow.
@@ -472,11 +509,12 @@
       );
       makeDanceable(actor, body, () => trip, HOP_FRAMES, 1200);
 
-      // The nozzle trails behind him (image's left edge, 86% down when facing right).
+      // The nozzle points ahead of him (image's right edge, 84% down when facing right),
+      // so he pushes the snow away in front of him.
       Snow.setBlower(() => {
         if (!actor.isConnected || trip.playState !== "running") return null;
         const r = body.getBoundingClientRect();
-        return { x: ltr ? r.left : r.right, y: r.top + r.height * 0.86, dir: ltr ? -1 : 1 };
+        return { x: ltr ? r.right : r.left, y: r.top + r.height * 0.84, dir: ltr ? 1 : -1 };
       });
       await played(trip, signal);
       Snow.setBlower(null);
@@ -685,7 +723,7 @@
         if (!s || s.x1 < 0 || s.x0 > W) continue;
         let n = em.rate * dt;
         while (n > 0) {
-          if (Math.random() < n && flakes.length < 220) {
+          if (Math.random() < n && flakes.length < 700) {
             flakes.push({
               x: rand(s.x0, s.x1), y: s.y, r: rand(0.8, 2), a: rand(0.35, 0.65),
               vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(8, 20),
@@ -833,6 +871,78 @@
     return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick };
   })();
 
+
+  // ------------------------------------------------------------- decorations
+  // Lights around the edge of the window and half a snowy pine in each bottom
+  // corner. Purely decorative: never catches a click, hidden in fullscreen.
+  const Decor = (() => {
+    let box = null, resizeT = null;
+    const COLORS = ["#ff3b3b", "#2ecc40", "#ffd23f", "#3b8bff"];
+    const NS = "http://www.w3.org/2000/svg";
+
+    function lights(W, H) {
+      const svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("class", "lights" + (settings.santaDecor.blink ? " blink" : ""));
+      svg.setAttribute("width", W);
+      svg.setAttribute("height", H);
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      const m = 4, gap = 48, sag = 9;
+      // Corner-to-corner perimeter, clockwise from top-left.
+      const sides = [[m, m, W - m, m], [W - m, m, W - m, H - m], [W - m, H - m, m, H - m], [m, H - m, m, m]];
+      let d = "", bulbs = "", k = 0;
+      for (const [x0, y0, x1, y1] of sides) {
+        const len = Math.hypot(x1 - x0, y1 - y0);
+        const n = Math.max(1, Math.round(len / gap));
+        const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+        const nx = -uy, ny = ux; // inward normal (clockwise path)
+        d += `M${x0},${y0}`;
+        for (let i = 1; i <= n; i++) {
+          const ax = x0 + ((x1 - x0) * i) / n, ay = y0 + ((y1 - y0) * i) / n;
+          const mx = x0 + ((x1 - x0) * (i - 0.5)) / n, my = y0 + ((y1 - y0) * (i - 0.5)) / n;
+          d += ` Q${mx + nx * sag * 2},${my + ny * sag * 2} ${ax},${ay}`;
+          // Bulb hangs at the low point of each scallop, pointing inward.
+          const bx = mx + nx * (sag + 4), by = my + ny * (sag + 4);
+          const ang = (Math.atan2(ny, nx) * 180) / Math.PI - 90;
+          const c = COLORS[k % 4];
+          bulbs += `<g class="bulb k${k % 4}" transform="translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${ang.toFixed(0)})">` +
+            `<rect x="-2.6" y="-6" width="5.2" height="4" rx="1" fill="#3a4a3a"/>` +
+            `<ellipse cx="0" cy="3" rx="4" ry="6" fill="${c}" filter="url(#glow)"/>` +
+            `<ellipse cx="-1.3" cy="1" rx="1.1" ry="2" fill="#fff" opacity=".55"/></g>`;
+          k++;
+        }
+      }
+      svg.innerHTML =
+        `<defs><filter id="glow" x="-150%" y="-150%" width="400%" height="400%">` +
+        `<feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` +
+        `<path d="${d}" fill="none" stroke="#24362a" stroke-width="1.6" stroke-linecap="round"/>` + bulbs;
+      return svg;
+    }
+
+    function render() {
+      const want = settings.santaEnabled && !document.fullscreenElement &&
+        (settings.santaDecor.lights || settings.santaDecor.trees);
+      box?.remove();
+      box = null;
+      if (!want) return;
+      ensureStage();
+      box = el("div", { className: "decor" });
+      layer.prepend(box);
+      if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
+      if (settings.santaDecor.trees) {
+        el("img", { className: "tree l", src: url("images/pine.webp"), alt: "" }, box);
+        el("img", { className: "tree r", src: url("images/pine.webp"), alt: "" }, box);
+      }
+    }
+
+    window.addEventListener("resize", () => {
+      if (!box) return;
+      clearTimeout(resizeT);
+      resizeT = setTimeout(render, 200);
+    });
+    document.addEventListener("fullscreenchange", render);
+    return { render };
+  })();
+
   // ---------------------------------------------------------------- scheduler
   // The countdown only runs while this tab is visible, so background tabs
   // never "save up" a Santa and nothing fires on a page you aren't looking at.
@@ -956,12 +1066,16 @@
         ...DEFAULTS,
         ...data,
         santaActs: { ...DEFAULTS.santaActs, ...(data.santaActs || {}) },
+        santaDecor: { ...DEFAULTS.santaDecor, ...(data.santaDecor || {}) },
       };
       cb?.();
     });
   }
 
-  load(() => settings.santaEnabled && schedule());
+  load(() => {
+    Decor.render();
+    if (settings.santaEnabled) schedule();
+  });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "sync") return;
@@ -969,6 +1083,7 @@
     const oldFreq = settings.santaFreq;
     load(() => {
       if (!settings.santaEnabled) return stopAll();
+      Decor.render();
       if (!wasEnabled || oldFreq !== settings.santaFreq) schedule();
     });
   });

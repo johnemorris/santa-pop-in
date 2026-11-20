@@ -5,6 +5,8 @@ const freqText = $("#freqText");
 const body = $("#body");
 const actBoxes = [...document.querySelectorAll("[data-act]")];
 let acts = { ...SANTA_DEFAULTS.santaActs };
+const decorBoxes = [...document.querySelectorAll("[data-decor]")];
+let decor = { ...SANTA_DEFAULTS.santaDecor };
 
 function paint(data) {
   enabled.checked = Boolean(data.santaEnabled);
@@ -13,7 +15,24 @@ function paint(data) {
   freqText.textContent = SANTA_FREQ_TEXT[data.santaFreq] || "";
   acts = { ...SANTA_DEFAULTS.santaActs, ...(data.santaActs || {}) };
   actBoxes.forEach((b) => (b.checked = Boolean(acts[b.dataset.act])));
+  decor = { ...SANTA_DEFAULTS.santaDecor, ...(data.santaDecor || {}) };
+  decorBoxes.forEach((b) => (b.checked = Boolean(decor[b.dataset.decor])));
+  syncBlink();
 }
+
+function syncBlink() {
+  const blink = decorBoxes.find((b) => b.dataset.decor === "blink");
+  blink.disabled = !decor.lights;
+  blink.parentElement.classList.toggle("dim", !decor.lights);
+}
+
+decorBoxes.forEach((b) =>
+  b.addEventListener("change", () => {
+    decor[b.dataset.decor] = b.checked;
+    chrome.storage.sync.set({ santaDecor: decor });
+    syncBlink();
+  })
+);
 
 chrome.storage.sync.get(SANTA_DEFAULTS, paint);
 
