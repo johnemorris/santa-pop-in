@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Santa Pop-In",
   "description": "A tiny Santa who pops in now and then: peeks, strolls, sleigh rides, candy canes, a snow cloud, and a leaf blower to clear the drifts.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "permissions": [
     "storage"
   ],

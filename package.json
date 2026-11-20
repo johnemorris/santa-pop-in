@@ -1,6 +1,6 @@
 {
   "name": "santa-pop-in",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Santa Pop-In Chrome extension",
   "scripts": {
     "zip": "bash scripts/build-zip.sh"

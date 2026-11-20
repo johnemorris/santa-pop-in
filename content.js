@@ -366,10 +366,20 @@
       if (!actor.isConnected || trip.playState !== "running") return;
       const r = actor.getBoundingClientRect();
       if (r.bottom > H - 8 - 0.05 * r.height && trip.currentTime < duration * 0.14) return; // still on the ground
-      sparkle(ltr ? r.left + r.width * 0.06 : r.right - r.width * 0.06, r.top + r.height * rand(0.55, 0.8));
+      const bx = ltr ? r.left + r.width * 0.06 : r.right - r.width * 0.06;
+      if (Math.random() < 0.35) sparkle(bx, r.top + r.height * rand(0.55, 0.8));
     }, 70);
+    // Snow flying off the runners the whole way, a big spray on take-off.
+    const powder = setInterval(() => {
+      if (!actor.isConnected || trip.playState !== "running") return;
+      const r = actor.getBoundingClientRect();
+      const bx = ltr ? r.left + r.width * 0.12 : r.right - r.width * 0.12;
+      const grounded = trip.currentTime < duration * 0.14 || trip.currentTime > duration * 0.9;
+      Snow.kick(bx, r.bottom - 6, dir, grounded ? 8 : 5);
+    }, 40);
     await played(trip, signal);
     clearInterval(trail);
+    clearInterval(powder);
     actor.remove();
   }
 
@@ -655,10 +665,10 @@
           ctx.stroke();
         } else {
           ctx.fillStyle = "#ffffff";
-          ctx.strokeStyle = "#a9bbd3";
-          ctx.lineWidth = 0.6;
+          ctx.strokeStyle = p.powder ? "#8fa6c4" : "#a9bbd3";
+          ctx.lineWidth = p.powder ? 0.8 : 0.6;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * (1 + p.age), 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, p.r * (1 + (p.powder ? 0.6 : 1) * p.age), 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
@@ -809,7 +819,18 @@
     }
 
     window.addEventListener("resize", resize);
-    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile };
+    // Powder thrown up behind the sleigh: drifts back, sinks and fades.
+    function kick(x, y, dir, n = 3) {
+      for (let k = 0; k < n && puffs.length < 260; k++) {
+        puffs.push({
+          x: x + rand(-8, 8), y: y + rand(-8, 6), r: rand(1.4, 3.4), a: rand(0.6, 0.95), powder: true,
+          vx: -dir * rand(60, 200), vy: rand(-70, 5), age: 0, life: rand(1.1, 2.0),
+        });
+      }
+      wake();
+    }
+
+    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick };
   })();
 
   // ---------------------------------------------------------------- scheduler
@@ -855,13 +876,50 @@
 
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
+  // Only the window you're actually using gets Santa. If this one isn't
+  // focused when its turn comes, wait until you come back to it, then ask the
+  // background whether another window had Santa recently.
+  let waitingForFocus = false;
+  function mayShow() {
+    const [lo] = FREQ_MINUTES[settings.santaFreq] || FREQ_MINUTES[3];
+    return new Promise((res) => {
+      try {
+        chrome.runtime.sendMessage({ type: "santa-may-show", gapMs: lo * 60 * 1000 * 0.8 }, (r) => {
+          if (chrome.runtime.lastError) return res(document.hasFocus());
+          res(Boolean(r?.ok));
+        });
+      } catch (e) {
+        res(false); // extension was reloaded; this old copy stays quiet
+      }
+    });
+  }
+
   async function fire() {
     timerId = null;
+    if (!document.hasFocus()) {
+      waitingForFocus = true;
+      return;
+    }
+    waitingForFocus = false;
     const quiet = document.fullscreenElement || reducedMotion?.matches || current;
     const act = quiet ? null : pickAct();
-    if (act) await run(act);
+    if (act && (await mayShow())) await run(act);
     schedule();
   }
+
+  window.addEventListener("focus", () => {
+    if (!waitingForFocus || !settings.santaEnabled) return;
+    waitingForFocus = false;
+    remaining = rand(2, 5) * 1000; // a beat after you return, not instantly
+    armTimer();
+  });
+
+  // Click into another window mid-act and Santa leaves this one.
+  window.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (!document.hasFocus() && current) current.abort();
+    }, 400);
+  });
 
   async function run(name) {
     current?.abort();
