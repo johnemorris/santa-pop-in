@@ -426,7 +426,7 @@
     const actor = el("div", {
       className: "actor click",
       title: "Click once to send the cloud away. Click several times for more snow.",
-      style: `top:${rand(6, 14)}vh;filter:drop-shadow(0 4px 6px rgba(40,60,90,.12));opacity:.62;`,
+      style: `top:${rand(6, 14)}vh;filter:drop-shadow(0 4px 6px rgba(40,60,90,.16));opacity:.97;`,
     });
     const body = el("div", { className: "bob" }, actor);
     body.innerHTML = cloudSVG();
@@ -459,18 +459,22 @@
           dismissed = true;
           emitter.stop();
           actor.style.pointerEvents = "none";
-          actor.animate([{ opacity: 0.62 }, { opacity: 0 }], { duration: 700, fill: "forwards" })
-            .onfinish = () => trip.finish();
+          Snow.evaporate();
+          body.animate(
+            [{ opacity: 1, transform: "scale(1)", filter: "blur(0)" },
+             { opacity: 0, transform: "scale(1.35, 1.15)", filter: "blur(6px)" }],
+            { duration: 450, easing: "ease-out", fill: "forwards" }
+          ).onfinish = () => trip.finish();
           return;
         }
         // Several clicks: snow harder (each new burst adds on), and keep dumping all the way across.
         level = Math.min(CLOUD_RATES.length - 1, level ? level + n : n);
         emitter.rate = CLOUD_RATES[level];
-        trip.updatePlaybackRate(level >= 5 ? 0.55 : 0.75);
+        // Heavier snow also lingers longer: the cloud slows down as it dumps.
+        trip.updatePlaybackRate(Math.max(0.28, 0.85 - level * 0.09));
         const dark = 1 - level * 0.04;
         body.animate([{ filter: `brightness(${dark})` }], { duration: 600, fill: "forwards" });
-        actor.style.opacity = String(Math.min(0.8, 0.62 + level * 0.03));
-      }, 450);
+      }, 350);
     });
     await played(trip, signal);
     clearTimeout(burst);
@@ -478,7 +482,7 @@
     actor.remove();
 
     // Santa always comes next to clear whatever fell.
-    if (!dismissed && !signal.aborted && settings.santaActs.blower) {
+    if (!signal.aborted && settings.santaActs.blower) {
       await sleep(1500, signal);
       if (!signal.aborted && Snow.hasPile()) await actBlower(signal, null);
     }
@@ -685,9 +689,9 @@
         ctx.beginPath();
         ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalAlpha = f.a * 0.35;
-        ctx.strokeStyle = "#8ea3c0";
-        ctx.lineWidth = 0.6;
+        ctx.globalAlpha = f.a * 0.75;
+        ctx.strokeStyle = "#7b93b6";
+        ctx.lineWidth = 0.8;
         ctx.stroke();
       }
       // Snow kicked up by the blower, and the wind streaks.
@@ -725,7 +729,7 @@
         while (n > 0) {
           if (Math.random() < n && flakes.length < 700) {
             flakes.push({
-              x: rand(s.x0, s.x1), y: s.y, r: rand(0.8, 2), a: rand(0.35, 0.65),
+              x: rand(s.x0, s.x1), y: s.y, r: rand(1.3, 3), a: rand(0.75, 0.95),
               vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(8, 20),
             });
           }
@@ -735,11 +739,16 @@
 
       for (let i = flakes.length - 1; i >= 0; i--) {
         const f = flakes[i];
+        if (f.evap) {
+          f.a -= dt * 2.2;
+          f.r *= 1 - dt * 0.8;
+          if (f.a <= 0) { flakes.splice(i, 1); continue; }
+        }
         f.phase += dt * 1.5;
         f.y += f.vy * dt;
         f.x += Math.sin(f.phase) * f.sway * dt;
         if (f.y >= H - heightAt(f.x) - f.r) {
-          if (f.x >= 0 && f.x <= W) deposit(f.x, f.r * 1.6 * weight(f.x));
+          if (!f.evap && f.x >= 0 && f.x <= W) deposit(f.x, f.r * 1.1 * weight(f.x));
           flakes.splice(i, 1);
         }
       }
@@ -868,7 +877,13 @@
       wake();
     }
 
-    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick };
+    // Flakes still in the air melt away before they land.
+    function evaporate() {
+      flakes.forEach((f) => (f.evap = true));
+      if (flakes.length) wake();
+    }
+
+    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick, evaporate };
   })();
 
 
@@ -886,7 +901,7 @@
       svg.setAttribute("width", W);
       svg.setAttribute("height", H);
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-      const m = 4, gap = 48, sag = 9;
+      const m = 1.5, gap = 44, sag = 4;
       // Corner-to-corner perimeter, clockwise from top-left.
       const sides = [[m, m, W - m, m], [W - m, m, W - m, H - m], [W - m, H - m, m, H - m], [m, H - m, m, m]];
       let d = "", bulbs = "", k = 0;
@@ -901,7 +916,7 @@
           const mx = x0 + ((x1 - x0) * (i - 0.5)) / n, my = y0 + ((y1 - y0) * (i - 0.5)) / n;
           d += ` Q${mx + nx * sag * 2},${my + ny * sag * 2} ${ax},${ay}`;
           // Bulb hangs at the low point of each scallop, pointing inward.
-          const bx = mx + nx * (sag + 4), by = my + ny * (sag + 4);
+          const bx = mx + nx * (sag + 2), by = my + ny * (sag + 2);
           const ang = (Math.atan2(ny, nx) * 180) / Math.PI - 90;
           const c = COLORS[k % 4];
           bulbs += `<g class="bulb k${k % 4}" transform="translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${ang.toFixed(0)})">` +
