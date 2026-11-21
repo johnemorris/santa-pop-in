@@ -91,9 +91,14 @@
     .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
     .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
     .tree { position: fixed; bottom: -6px; height: min(230px, 30vh); width: auto; opacity: .97;
-            filter: drop-shadow(0 2px 4px rgba(30,50,70,.18)); }
-    .tree.l { left: 0; transform: translateX(-50%); }
-    .tree.r { right: 0; transform: translateX(50%); }
+            filter: drop-shadow(0 2px 4px rgba(30,50,70,.18));
+            transition: opacity .3s ease, filter .3s ease, transform .3s ease; }
+    .tree.l { left: 0; transform: translateX(-50%); transform-origin: 0 100%; }
+    .tree.r { right: 0; transform: translateX(50%); transform-origin: 100% 100%; }
+    /* Mouse over a tree: it steps back into the background so the page shows through. */
+    .tree.back { opacity: .16; filter: blur(1.5px) saturate(.6); }
+    .tree.l.back { transform: translateX(-50%) scale(.9); }
+    .tree.r.back { transform: translateX(50%) scale(.9); }
     svg.lights { position: fixed; left: 0; top: 0; overflow: visible; }
     .bulb { transform-box: fill-box; transform-origin: center; }
     .blink .bulb { animation: twinkle 2.4s ease-in-out infinite; }
@@ -891,7 +896,7 @@
   // Lights around the edge of the window and half a snowy pine in each bottom
   // corner. Purely decorative: never catches a click, hidden in fullscreen.
   const Decor = (() => {
-    let box = null, resizeT = null;
+    let box = null, resizeT = null, trees = [], hoverRaf = 0, mx = -1, my = -1;
     const COLORS = ["#ff3b3b", "#2ecc40", "#ffd23f", "#3b8bff"];
     const NS = "http://www.w3.org/2000/svg";
 
@@ -944,10 +949,34 @@
       layer.prepend(box);
       if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
       if (settings.santaDecor.trees) {
-        el("img", { className: "tree l", src: url("images/pine.webp"), alt: "" }, box);
-        el("img", { className: "tree r", src: url("images/pine.webp"), alt: "" }, box);
-      }
+        trees = [
+          el("img", { className: "tree l", src: url("images/pine.webp"), alt: "" }, box),
+          el("img", { className: "tree r", src: url("images/pine.webp"), alt: "" }, box),
+        ];
+      } else trees = [];
     }
+
+    // Trees never catch clicks, so hover is worked out from the pointer
+    // position: inside a tree's cone, it fades back and the page behind is
+    // plain to see and click. Uses the full-size rect even while faded.
+    function overTree(t) {
+      const r = t.getBoundingClientRect();
+      const fullH = r.height / (t.classList.contains("back") ? 0.9 : 1);
+      const fullW = r.width / (t.classList.contains("back") ? 0.9 : 1);
+      const left = t.classList.contains("l") ? r.left : r.right - fullW;
+      const top = r.bottom - fullH;
+      if (mx < left || mx > left + fullW || my < top || my > r.bottom) return false;
+      const cx = left + fullW / 2, depth = (my - top) / fullH; // 0 at tip, 1 at base
+      return Math.abs(mx - cx) <= (fullW / 2) * Math.min(1, 0.15 + depth * 1.05) + 12;
+    }
+    function checkHover() {
+      hoverRaf = 0;
+      for (const t of trees) t.classList.toggle("back", mx >= 0 && overTree(t));
+    }
+    function queueHover() { if (trees.length && !hoverRaf) hoverRaf = requestAnimationFrame(checkHover); }
+    document.addEventListener("mousemove", (e) => { mx = e.clientX; my = e.clientY; queueHover(); }, { passive: true, capture: true });
+    document.addEventListener("mouseleave", () => { mx = my = -1; queueHover(); });
+    window.addEventListener("blur", () => { mx = my = -1; queueHover(); });
 
     window.addEventListener("resize", () => {
       if (!box) return;
