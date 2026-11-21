@@ -1,3 +1,5 @@
+importScripts("settings.js");
+
 const KEY = "santaEnabled";
 
 function setBadge(enabled) {
@@ -6,7 +8,7 @@ function setBadge(enabled) {
 }
 
 function refreshBadge() {
-  chrome.storage.sync.get({ [KEY]: true }, (data) => setBadge(Boolean(data[KEY])));
+  chrome.storage.sync.get({ [KEY]: SANTA_DEFAULTS.santaEnabled }, (data) => setBadge(Boolean(data[KEY])));
 }
 
 chrome.runtime.onInstalled.addListener(refreshBadge);
@@ -21,14 +23,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type !== "santa-may-show") return;
   const tab = sender.tab;
-  if (!tab || !tab.active || sender.frameId) return reply({ ok: false });
-  chrome.windows.get(tab.windowId, async (win) => {
-    if (chrome.runtime.lastError || !win?.focused || win.state === "minimized") return reply({ ok: false });
-    const { santaLastShown = 0 } = await chrome.storage.session.get("santaLastShown");
-    const now = Date.now();
-    if (now - santaLastShown < (msg.gapMs || 0)) return reply({ ok: false });
-    await chrome.storage.session.set({ santaLastShown: now });
-    reply({ ok: true });
-  });
+  if (!tab || !tab.active || sender.frameId) {
+    reply({ ok: false });
+    return;
+  }
+  (async () => {
+    try {
+      const win = await chrome.windows.get(tab.windowId);
+      if (!win?.focused || win.state === "minimized") return reply({ ok: false });
+      const { santaLastShown = 0 } = await chrome.storage.session.get("santaLastShown");
+      const now = Date.now();
+      if (now - santaLastShown < (msg.gapMs || 0)) return reply({ ok: false });
+      await chrome.storage.session.set({ santaLastShown: now });
+      reply({ ok: true });
+    } catch {
+      reply({ ok: false });
+    }
+  })();
   return true;
 });

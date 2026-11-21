@@ -6,22 +6,7 @@
   window.__santaPopInLoaded = true;
 
   // ---------------------------------------------------------------- settings
-  const DEFAULTS = {
-    santaEnabled: true,
-    santaFreq: 3, // 1 = rare ... 5 = often
-    santaActs: {
-      peek: true,
-      walk: true,
-      sleigh: true,
-      cloud: true,
-      canes: true,
-      dance: true,
-      blower: true,
-    },
-    // Always-on decorations: off until you turn them on.
-    santaDecor: { lights: false, blink: true, trees: false },
-  };
-
+  // SANTA_DEFAULTS and mergeSantaSettings are loaded from settings.js.
   // Minutes of *visible* tab time between appearances, per slider step.
   const FREQ_MINUTES = {
     1: [10, 20],
@@ -34,7 +19,7 @@
   // How often each scheduled act is picked (among the ones switched on).
   const ACT_WEIGHTS = { peek: 50, walk: 25, sleigh: 12, cloud: 13 };
 
-  let settings = structuredClone(DEFAULTS);
+  let settings = mergeSantaSettings();
 
   const url = (p) => chrome.runtime.getURL(p);
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -149,6 +134,7 @@
     const r = target.getBoundingClientRect();
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
+        if (!target.isConnected) return;
         const n = el("div", {
           className: "note",
           textContent: NOTES[i % NOTES.length],
@@ -194,7 +180,8 @@
   ];
 
   // Clicking an actor pauses its trip, plays a little routine, then carries on.
-  function makeDanceable(actor, body, getTrip, frames = DANCE_FRAMES, duration = 2600) {
+  function makeDanceable(actor, body, getTrip, signal, frames = DANCE_FRAMES, duration = 2600) {
+    if (!settings.santaActs.dance) return;
     let dancing = false;
     actor.classList.add("click");
     actor.title = "Click me!";
@@ -208,9 +195,9 @@
       const idle = body.className;
       body.className = "";
       spawnNotes(body);
-      await played(body.animate(frames, { duration, easing: "ease-in-out" }));
+      await played(body.animate(frames, { duration, easing: "ease-in-out" }), signal);
       body.className = idle;
-      if (trip && trip.playState === "paused") trip.play();
+      if (trip && trip.playState === "paused" && !signal?.aborted) trip.play();
       dancing = false;
     });
   }
@@ -309,7 +296,7 @@
         { duration: 1400, easing: "ease-in-out" }
       );
     });
-    makeDanceable(actor, body, () => trip, HOP_FRAMES, 1300);
+    makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1300);
     await played(trip, signal);
     actor.remove();
   }
@@ -330,7 +317,7 @@
       [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
       { duration, easing: "linear", fill: "forwards" }
     );
-    makeDanceable(actor, body, () => trip);
+    makeDanceable(actor, body, () => trip, signal);
     // The sack is on Santa's back: left side when walking right.
     scheduleCanes(actor, () => (ltr ? 0.18 : 0.82), duration, signal, Math.floor(rand(1, 4)));
     await played(trip, signal);
@@ -377,7 +364,7 @@
     const actor = el("div", { className: "actor", style: `bottom:${6 + Snow.heightAt(W / 2) * 0.5}px;` });
     const body = el("img", { className: "gallop", src: url("images/sleigh.webp"), alt: "", style: `width:${width}px;height:auto;` }, actor);
     const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
-    makeDanceable(actor, body, () => trip, HOP_FRAMES, 1100);
+    makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1100);
     scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, Math.random() < 0.5 ? 1 : 0);
 
     const trail = setInterval(() => {
@@ -395,10 +382,13 @@
       const grounded = trip.currentTime < duration * 0.14 || trip.currentTime > duration * 0.9;
       Snow.kick(bx, r.bottom - 6, dir, grounded ? 8 : 5);
     }, 40);
-    await played(trip, signal);
-    clearInterval(trail);
-    clearInterval(powder);
-    actor.remove();
+    try {
+      await played(trip, signal);
+    } finally {
+      clearInterval(trail);
+      clearInterval(powder);
+      actor.remove();
+    }
   }
 
   // A soft, layered cloud with a slightly grey underside.
@@ -481,10 +471,13 @@
         body.animate([{ filter: `brightness(${dark})` }], { duration: 600, fill: "forwards" });
       }, 350);
     });
-    await played(trip, signal);
-    clearTimeout(burst);
-    emitter.stop();
-    actor.remove();
+    try {
+      await played(trip, signal);
+    } finally {
+      clearTimeout(burst);
+      emitter.stop();
+      actor.remove();
+    }
 
     // Santa always comes next to clear whatever fell.
     if (!signal.aborted && settings.santaActs.blower) {
@@ -495,6 +488,7 @@
 
   // Santa wanders out with a (silent!) leaf blower and clears the snow.
   let blowing = false;
+  let blowerCtl = null;
   async function actBlower(signal, fromX) {
     if (blowing) return;
     blowing = true;
@@ -516,7 +510,7 @@
         [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
         { duration, easing: "linear", fill: "forwards" }
       );
-      makeDanceable(actor, body, () => trip, HOP_FRAMES, 1200);
+      makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1200);
 
       // The nozzle points ahead of him (image's right edge, 84% down when facing right),
       // so he pushes the snow away in front of him.
@@ -525,10 +519,13 @@
         const r = body.getBoundingClientRect();
         return { x: ltr ? r.right : r.left, y: r.top + r.height * 0.84, dir: ltr ? 1 : -1 };
       });
-      await played(trip, signal);
-      Snow.setBlower(null);
-      Snow.fadePile(); // tidy any crumbs he missed
-      actor.remove();
+      try {
+        await played(trip, signal);
+      } finally {
+        Snow.setBlower(null);
+        Snow.fadePile(); // tidy any crumbs he missed
+        actor.remove();
+      }
     } finally {
       blowing = false;
     }
@@ -541,7 +538,12 @@
     if (blowing) return;
     if (settings.santaActs.blower) {
       // Runs alongside whatever else is on screen; it isn't a scheduled act.
-      actBlower(new AbortController().signal, x).catch(() => {});
+      blowerCtl?.abort();
+      const ctl = new AbortController();
+      blowerCtl = ctl;
+      actBlower(ctl.signal, x).catch(() => {}).finally(() => {
+        if (blowerCtl === ctl) blowerCtl = null;
+      });
     } else {
       Snow.fadePile();
     }
@@ -943,6 +945,7 @@
         (settings.santaDecor.lights || settings.santaDecor.trees);
       box?.remove();
       box = null;
+      trees = [];
       if (!want) return;
       ensureStage();
       box = el("div", { className: "decor" });
@@ -953,7 +956,7 @@
           el("img", { className: "tree l", src: url("images/pine.webp"), alt: "" }, box),
           el("img", { className: "tree r", src: url("images/pine.webp"), alt: "" }, box),
         ];
-      } else trees = [];
+      }
     }
 
     // Trees never catch clicks, so hover is worked out from the pointer
@@ -1039,7 +1042,7 @@
     return new Promise((res) => {
       try {
         chrome.runtime.sendMessage({ type: "santa-may-show", gapMs: lo * 60 * 1000 * 0.8 }, (r) => {
-          if (chrome.runtime.lastError) return res(document.hasFocus());
+          if (chrome.runtime.lastError) return res(false);
           res(Boolean(r?.ok));
         });
       } catch (e) {
@@ -1091,8 +1094,11 @@
   function stopAll() {
     clearTimeout(timerId);
     timerId = null;
+    waitingForFocus = false;
     current?.abort();
     current = null;
+    blowerCtl?.abort();
+    blowerCtl = null;
     Snow.clear();
     host?.remove();
     host = root = layer = null;
@@ -1105,13 +1111,8 @@
 
   // ---------------------------------------------------------------- settings
   function load(cb) {
-    chrome.storage.sync.get(DEFAULTS, (data) => {
-      settings = {
-        ...DEFAULTS,
-        ...data,
-        santaActs: { ...DEFAULTS.santaActs, ...(data.santaActs || {}) },
-        santaDecor: { ...DEFAULTS.santaDecor, ...(data.santaDecor || {}) },
-      };
+    chrome.storage.sync.get(SANTA_DEFAULTS, (data) => {
+      settings = mergeSantaSettings(data);
       cb?.();
     });
   }

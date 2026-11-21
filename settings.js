@@ -1,11 +1,19 @@
-// Shared defaults for the popup and background worker.
-// (content.js keeps its own copy because content scripts can't import modules.)
+// Shared defaults for the popup, content script, and background worker.
 const SANTA_DEFAULTS = {
   santaEnabled: true,
   santaFreq: 3,
   santaActs: { peek: true, walk: true, sleigh: true, cloud: true, canes: true, dance: true, blower: true },
   santaDecor: { lights: false, blink: true, trees: false },
 };
+
+function mergeSantaSettings(data = {}) {
+  return {
+    ...SANTA_DEFAULTS,
+    ...data,
+    santaActs: { ...SANTA_DEFAULTS.santaActs, ...(data.santaActs || {}) },
+    santaDecor: { ...SANTA_DEFAULTS.santaDecor, ...(data.santaDecor || {}) },
+  };
+}
 
 // Popup wording for each slider step (minutes of visible tab time).
 const SANTA_FREQ_TEXT = {

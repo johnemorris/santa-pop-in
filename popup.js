@@ -9,13 +9,15 @@ const decorBoxes = [...document.querySelectorAll("[data-decor]")];
 let decor = { ...SANTA_DEFAULTS.santaDecor };
 
 function paint(data) {
-  enabled.checked = Boolean(data.santaEnabled);
-  body.classList.toggle("off", !data.santaEnabled);
-  freq.value = data.santaFreq;
-  freqText.textContent = SANTA_FREQ_TEXT[data.santaFreq] || "";
-  acts = { ...SANTA_DEFAULTS.santaActs, ...(data.santaActs || {}) };
+  const merged = mergeSantaSettings(data);
+  enabled.checked = Boolean(merged.santaEnabled);
+  body.classList.toggle("off", !merged.santaEnabled);
+  body.inert = !merged.santaEnabled;
+  freq.value = merged.santaFreq;
+  freqText.textContent = SANTA_FREQ_TEXT[merged.santaFreq] || "";
+  acts = merged.santaActs;
   actBoxes.forEach((b) => (b.checked = Boolean(acts[b.dataset.act])));
-  decor = { ...SANTA_DEFAULTS.santaDecor, ...(data.santaDecor || {}) };
+  decor = merged.santaDecor;
   decorBoxes.forEach((b) => (b.checked = Boolean(decor[b.dataset.decor])));
   syncBlink();
 }
@@ -39,6 +41,7 @@ chrome.storage.sync.get(SANTA_DEFAULTS, paint);
 enabled.addEventListener("change", () => {
   chrome.storage.sync.set({ santaEnabled: enabled.checked });
   body.classList.toggle("off", !enabled.checked);
+  body.inert = !enabled.checked;
 });
 
 freq.addEventListener("input", () => {

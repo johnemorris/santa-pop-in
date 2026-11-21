@@ -21,6 +21,7 @@
         "<all_urls>"
       ],
       "js": [
+        "settings.js",
         "content.js"
       ],
       "css": [
