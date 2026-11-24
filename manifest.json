@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Santa Pop-In",
   "description": "A tiny Santa who pops in with holiday surprises, a Christmas countdown sign, snow clouds, candy canes, lights, and snowy pines.",
-  "version": "1.4.8",
+  "version": "1.4.9",
   "permissions": [
     "storage",
     "activeTab",
@@ -24,7 +24,13 @@
       ],
       "js": [
         "settings.js",
-        "content.js"
+        "content/core.js",
+        "content/stage.js",
+        "content/effects.js",
+        "content/acts.js",
+        "content/snow.js",
+        "content/decor.js",
+        "content/main.js"
       ],
       "css": [
         "styles.css"

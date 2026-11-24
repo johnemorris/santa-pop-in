@@ -6,6 +6,7 @@ const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
+const CONTENT_FILES = ["core", "stage", "effects", "acts", "snow", "decor", "main"].map((f) => `content/${f}.js`);
 
 test("manifest.json and package.json versions and scripts are consistent", () => {
   const manifest = JSON.parse(read("manifest.json"));
@@ -13,7 +14,8 @@ test("manifest.json and package.json versions and scripts are consistent", () =>
   assert.equal(manifest.manifest_version, 3);
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.version, manifest.version);
-  assert.deepEqual(manifest.content_scripts[0].js, ["settings.js", "content.js"]);
+  assert.deepEqual(manifest.content_scripts[0].js, ["settings.js", ...CONTENT_FILES]);
+  for (const f of manifest.content_scripts[0].js) assert.ok(fs.existsSync(path.join(ROOT, f)), `Missing content script: ${f}`);
   assert.ok(manifest.permissions.includes("storage"));
   assert.ok(manifest.permissions.includes("alarms"));
   for (const res of manifest.web_accessible_resources[0].resources) {
@@ -228,7 +230,7 @@ test("popup.js inert state, pause/snooze controls, and settings persistence", as
   assert.ok(stored.santaSnoozeUntil > Date.now());
 });
 
-test("content.js lifecycle: stopAll during blower, hover translucency, cloud single-click, and cane-pop decor stability", async () => {
+test("content scripts lifecycle: stopAll during blower, hover translucency, cloud single-click, and cane-pop decor stability", async () => {
   const animations = [];
   const docListeners = {};
   const winListeners = {};
@@ -389,7 +391,7 @@ test("content.js lifecycle: stopAll during blower, hover translucency, cloud sin
 
   vm.createContext(ctx);
   vm.runInContext(read("settings.js"), ctx);
-  vm.runInContext(read("content.js"), ctx);
+  for (const f of CONTENT_FILES) vm.runInContext(read(f), ctx, { filename: f });
 
   // Enable trees to verify hover translucency + decor stability on santaCanesCaught
   syncSettings = { santaEnabled: true, santaDecor: { lights: true, trees: true, ornaments: true } };
