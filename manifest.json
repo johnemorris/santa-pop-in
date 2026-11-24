@@ -1,10 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Santa Pop-In",
-  "description": "A tiny Santa who pops in now and then, plus a snow cloud, a leaf blower, and optional lights and snowy pines.",
-  "version": "1.3.2",
+  "description": "A tiny Santa who pops in with holiday surprises, a Christmas countdown sign, snow clouds, candy canes, lights, and snowy pines.",
+  "version": "1.4.0",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "alarms"
   ],
   "action": {
     "default_popup": "popup.html",

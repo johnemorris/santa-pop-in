@@ -6,7 +6,8 @@
   window.__santaPopInLoaded = true;
 
   // ---------------------------------------------------------------- settings
-  // SANTA_DEFAULTS and mergeSantaSettings are loaded from settings.js.
+  // SANTA_DEFAULTS, mergeSantaSettings, and santaDaysUntilChristmas are loaded from settings.js.
+
   // Minutes of *visible* tab time between appearances, per slider step.
   const FREQ_MINUTES = {
     1: [10, 20],
@@ -16,13 +17,17 @@
     5: [0.66, 1.5],
   };
 
+  const SIZE_SCALES = { 1: 0.78, 2: 1.0, 3: 1.28 };
+
   // How often each scheduled act is picked (among the ones switched on).
-  const ACT_WEIGHTS = { peek: 50, walk: 25, sleigh: 12, cloud: 13 };
+  // Countdown sign and top-edge rope drop are occasional treats.
+  const ACT_WEIGHTS = { peek: 44, walk: 22, sleigh: 11, cloud: 12, sign: 6, drop: 5 };
 
   let settings = mergeSantaSettings();
 
   const url = (p) => chrome.runtime.getURL(p);
   const rand = (a, b) => a + Math.random() * (b - a);
+  const sizeScale = () => SIZE_SCALES[settings.santaSize] || 1;
   const sleep = (ms, signal) =>
     new Promise((resolve) => {
       const t = setTimeout(resolve, ms);
@@ -31,6 +36,120 @@
         resolve();
       });
     });
+
+  function isChristmasHoliday() {
+    const now = new Date();
+    return now.getMonth() === 11 && (now.getDate() === 24 || now.getDate() === 25);
+  }
+
+  function currentHost() {
+    return (window.location.hostname || "").toLowerCase();
+  }
+
+  function isSitePaused() {
+    const hostName = currentHost();
+    if (!hostName) return false;
+    return Array.isArray(settings.santaPausedSites) && settings.santaPausedSites.includes(hostName);
+  }
+
+  function isSnoozed() {
+    return Number(settings.santaSnoozeUntil) > Date.now();
+  }
+
+  function isActiveHere() {
+    return Boolean(settings.santaEnabled) && !isSitePaused() && !isSnoozed();
+  }
+
+  // ------------------------------------------------------------------ audio
+  // Optional lightweight synthesized holiday chimes (off by default).
+  const Sound = (() => {
+    let ctx = null;
+
+    function getCtx() {
+      if (!settings.santaSound) return null;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        if (!ctx) ctx = new AC();
+        if (ctx.state === "suspended") ctx.resume().catch(() => {});
+        return ctx;
+      } catch {
+        return null;
+      }
+    }
+
+    function tone(freq, startOffset, dur, gainVal = 0.05, type = "sine") {
+      const c = getCtx();
+      if (!c) return;
+      try {
+        const t = c.currentTime + startOffset;
+        const osc = c.createOscillator();
+        const g = c.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(gainVal, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(g);
+        g.connect(c.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      } catch {
+        // ignore audio errors
+      }
+    }
+
+    return {
+      canePop() {
+        tone(880, 0, 0.12, 0.055, "triangle");
+        tone(1318.5, 0.045, 0.16, 0.05, "sine");
+        tone(1760, 0.09, 0.22, 0.04, "sine");
+      },
+      dance() {
+        tone(523.25, 0, 0.14, 0.045, "triangle");
+        tone(659.25, 0.11, 0.14, 0.045, "triangle");
+        tone(783.99, 0.22, 0.24, 0.05, "sine");
+      },
+      sleigh() {
+        [1567.98, 2093, 2637, 2093].forEach((f, i) => tone(f, i * 0.075, 0.2, 0.025, "sine"));
+      },
+      sign() {
+        tone(659.25, 0, 0.18, 0.04, "sine");
+        tone(987.77, 0.1, 0.28, 0.045, "triangle");
+      },
+      cloud(level) {
+        const base = 620 + Math.min(level, 6) * 85;
+        tone(base, 0, 0.15, 0.035, "sine");
+      },
+      blower() {
+        const c = getCtx();
+        if (!c) return;
+        try {
+          const len = Math.floor(c.sampleRate * 0.35);
+          const buf = c.createBuffer(1, len, c.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * 0.4;
+          const src = c.createBufferSource();
+          src.buffer = buf;
+          const filter = c.createBiquadFilter();
+          filter.type = "bandpass";
+          filter.frequency.value = 520;
+          filter.Q.value = 0.8;
+          const g = c.createGain();
+          const t = c.currentTime;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(0.03, t + 0.08);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+          src.connect(filter);
+          filter.connect(g);
+          g.connect(c.destination);
+          src.start(t);
+        } catch {
+          // ignore
+        }
+      },
+    };
+  })();
 
   // ------------------------------------------------------------------- stage
   let host, root, layer;
@@ -46,6 +165,8 @@
     .gallop { animation: gallop 0.36s ease-in-out infinite; transform-origin: 60% 80%; }
     .bob    { animation: bob 3.4s ease-in-out infinite; }
     .rumble { animation: rumble 0.09s linear infinite; }
+    .sway   { animation: sway 2.2s ease-in-out infinite; transform-origin: 50% 0%; }
+    .sign-rock { animation: signRock 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
     @keyframes waddle {
       0%, 100% { transform: translateY(0) rotate(-3deg) scale(1.01, .99); }
       25%      { transform: translateY(-7px) rotate(0deg) scale(.99, 1.02); }
@@ -64,32 +185,167 @@
       0%, 100% { transform: translate(0, 0); }
       50%      { transform: translate(.6px, -.5px); }
     }
+    @keyframes sway {
+      0%, 100% { transform: rotate(-4.5deg); }
+      50%      { transform: rotate(4.5deg); }
+    }
+    @keyframes signRock {
+      0%, 100% { transform: rotate(-1.6deg); }
+      50%      { transform: rotate(1.6deg); }
+    }
     .shadow { position: absolute; left: 12%; right: 12%; bottom: -5px; height: 10px;
               border-radius: 50%; background: radial-gradient(closest-side, rgba(20,30,50,.28), transparent);
               pointer-events: none; }
     .note { position: fixed; font: 700 20px/1 system-ui, sans-serif; color: #c1121f;
-            text-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: none; z-index: 3; }
+            text-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: none; z-index: 4; }
     .spark { position: fixed; width: 6px; height: 6px; pointer-events: none; z-index: 1;
              background: radial-gradient(closest-side, #fff8d6, rgba(255,215,90,.8) 45%, transparent);
              border-radius: 50%; }
-    canvas.snow { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 1; }
+    .spark.gold { width: 8px; height: 8px;
+                  background: radial-gradient(closest-side, #fffef0, rgba(255,215,64,.95) 50%, transparent); }
+    .glitter { position: fixed; pointer-events: none; z-index: 5; will-change: transform, opacity; }
+    .glitter.star { clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%); }
+    .glitter.shard { border-radius: 2px; }
+    .glitter.dot { border-radius: 50%; }
+    .glitter.stripe {
+      border-radius: 2px;
+      background: repeating-linear-gradient(45deg, #ffffff 0 3px, #d62828 3px 6px);
+    }
+    .rig { position: relative; display: block; }
+    .rig-sizer { width: 100%; height: auto; visibility: hidden; pointer-events: none; }
+    .rig-part { position: absolute; inset: 0; width: 100%; height: 100%; will-change: transform; }
+
+    /* Walking Santa: legs cross front-to-back & back-to-front under the coat hem */
+    .rig-walk .leg-back {
+      clip-path: polygon(22% 70%, 58.5% 70%, 58.5% 100%, 22% 100%);
+      transform-origin: 48% 72%;
+    }
+    .rig-walk .leg-front {
+      clip-path: polygon(58.5% 70%, 100% 70%, 100% 100%, 58.5% 100%);
+      transform-origin: 67% 72%;
+    }
+    .rig-walk .torso {
+      clip-path: polygon(0% 0%, 100% 0%, 100% 75.5%, 80% 76%, 58% 74%, 28% 72%, 0% 72%);
+    }
+    .rig-walk.waddle { animation-duration: 0.72s; }
+    .rig-walk.waddle .leg-back  { animation: walkBackToFront 0.72s linear infinite; }
+    .rig-walk.waddle .leg-front { animation: walkFrontToBack 0.72s linear infinite; }
+
+    /* Leaf-blower Santa: legs cross beneath coat hem & diagonal blower tube */
+    .rig-blower .leg-back {
+      clip-path: polygon(0% 69%, 36% 69%, 36% 100%, 0% 100%);
+      transform-origin: 22% 71%;
+    }
+    .rig-blower .leg-front {
+      clip-path: polygon(34% 72%, 73% 72%, 73% 100%, 34% 100%);
+      transform-origin: 46% 73%;
+    }
+    .rig-blower .torso {
+      clip-path: polygon(0% 0%, 100% 0%, 100% 94%, 74% 83%, 58% 76%, 42% 73%, 0% 71%);
+    }
+    .rig-blower.waddle { animation-duration: 0.58s; }
+    .rig-blower.waddle .leg-back  { animation: blowerBackToFront 0.58s linear infinite; }
+    .rig-blower.waddle .leg-front { animation: blowerFrontToBack 0.58s linear infinite; }
+
+    /* Sleigh reindeer: full gallop from extended bound to gathered tuck under the belly */
+    .rig-sleigh .leg-back {
+      clip-path: polygon(63% 71%, 82.5% 71%, 82.5% 100%, 63% 100%);
+      transform-origin: 75% 71%;
+    }
+    .rig-sleigh .leg-front {
+      clip-path: polygon(82.5% 70%, 100% 70%, 100% 100%, 82.5% 100%);
+      transform-origin: 87% 70%;
+    }
+    .rig-sleigh .torso {
+      clip-path: polygon(0% 0%, 100% 0%, 100% 72.5%, 82.5% 72.5%, 68% 73.5%, 63% 78%, 62% 100%, 0% 100%);
+    }
+    .rig-sleigh.gallop .leg-back  { animation: gallopHind 0.42s ease-in-out infinite; }
+    .rig-sleigh.gallop .leg-front { animation: gallopFront 0.42s ease-in-out infinite; }
+
+    /* Santa walk cycle: back leg starts behind -> lifts & passes center -> lands in front -> pushes back */
+    @keyframes walkBackToFront {
+      0%, 100% { transform: translate(0%, 0%) rotate(4deg); }
+      25%      { transform: translate(9%, -4%) rotate(-21deg); }
+      50%      { transform: translate(17%, -1%) rotate(-42deg); }
+      75%      { transform: translate(8%, 1%) rotate(-19deg); }
+    }
+    /* Front leg starts ahead -> pushes back along ground -> trails behind -> lifts & passes forward */
+    @keyframes walkFrontToBack {
+      0%, 100% { transform: translate(0%, -1%) rotate(-4deg); }
+      25%      { transform: translate(-8%, 1%) rotate(19deg); }
+      50%      { transform: translate(-17%, 0%) rotate(42deg); }
+      75%      { transform: translate(-9%, -4%) rotate(21deg); }
+    }
+
+    @keyframes blowerBackToFront {
+      0%, 100% { transform: translate(0%, 0%) rotate(4deg); }
+      25%      { transform: translate(9%, -4%) rotate(-18deg); }
+      50%      { transform: translate(18%, -1%) rotate(-36deg); }
+      75%      { transform: translate(9%, 1%) rotate(-16deg); }
+    }
+    @keyframes blowerFrontToBack {
+      0%, 100% { transform: translate(0%, -1%) rotate(-4deg); }
+      25%      { transform: translate(-9%, 1%) rotate(16deg); }
+      50%      { transform: translate(-18%, 0%) rotate(36deg); }
+      75%      { transform: translate(-9%, -4%) rotate(18deg); }
+    }
+
+    /* Reindeer gallop: 0% extended leap (hind back, front forward) -> 50% tucked together under belly */
+    @keyframes gallopHind {
+      0%, 100% { transform: translate(0%, 0%) rotate(18deg); }
+      50%      { transform: translate(4%, -2%) rotate(-34deg); }
+    }
+    @keyframes gallopFront {
+      0%, 100% { transform: translate(0%, -2%) rotate(-18deg); }
+      50%      { transform: translate(-4%, 1%) rotate(38deg); }
+    }
+    .speech { position: fixed; pointer-events: none; z-index: 5; max-width: 190px;
+              font: 700 12px/1.25 system-ui, -apple-system, sans-serif; color: #1e293b;
+              background: #ffffff; border: 1.5px solid #fca5a5; border-radius: 12px;
+              padding: 6px 10px; box-shadow: 0 6px 18px rgba(15,23,42,.16);
+              text-align: center; white-space: nowrap; }
+    .speech::after { content: ""; position: absolute; left: 50%; bottom: -6px;
+                     width: 10px; height: 10px; background: #ffffff;
+                     border-right: 1.5px solid #fca5a5; border-bottom: 1.5px solid #fca5a5;
+                     transform: translateX(-50%) rotate(45deg); }
+    .cane-actor { position: fixed; left: 0; will-change: transform; z-index: 3;
+                  padding: 6px; margin: -6px; transition: filter .15s ease; }
+    .cane-actor:hover { filter: drop-shadow(0 0 6px rgba(214,40,40,.65)) brightness(1.06); }
+    .sign-wrap { display: flex; align-items: flex-end; gap: 0; position: relative; }
+    .sign-board { filter: drop-shadow(0 6px 12px rgba(15,23,42,.22)); }
+    canvas.snow { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 1;
+                  transition: opacity .3s ease, filter .3s ease; }
+    canvas.snow.back { opacity: .16; filter: blur(1.5px); }
     .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
     .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-    .tree { position: fixed; bottom: -6px; height: min(230px, 30vh); width: auto; opacity: .97;
-            filter: drop-shadow(0 2px 4px rgba(30,50,70,.18));
-            transition: opacity .3s ease, filter .3s ease, transform .3s ease; }
-    .tree.l { left: 0; transform: translateX(-50%); transform-origin: 0 100%; }
-    .tree.r { right: 0; transform: translateX(50%); transform-origin: 100% 100%; }
+    .tree-wrap { position: fixed; bottom: -6px; height: min(230px, 30vh); opacity: .97;
+                 filter: drop-shadow(0 2px 4px rgba(30,50,70,.18));
+                 transition: opacity .3s ease, filter .3s ease, transform .3s ease; }
+    .tree-wrap.l { left: 0; transform: translateX(-50%); transform-origin: 0 100%; }
+    .tree-wrap.r { right: 0; transform: translateX(50%); transform-origin: 100% 100%; }
     /* Mouse over a tree: it steps back into the background so the page shows through. */
-    .tree.back { opacity: .16; filter: blur(1.5px) saturate(.6); }
-    .tree.l.back { transform: translateX(-50%) scale(.9); }
-    .tree.r.back { transform: translateX(50%) scale(.9); }
+    .tree-wrap.back { opacity: .16; filter: blur(1.5px) saturate(.6); }
+    .tree-wrap.l.back { transform: translateX(-50%) scale(.9); }
+    .tree-wrap.r.back { transform: translateX(50%) scale(.9); }
+    .tree-img { height: 100%; width: auto; display: block; }
+    .tree-ornaments { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .orn { animation: ornGlow 2.8s ease-in-out infinite; }
+    .orn.d1 { animation-delay: -.7s; } .orn.d2 { animation-delay: -1.4s; } .orn.d3 { animation-delay: -2.1s; }
+    @keyframes ornGlow { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
     svg.lights { position: fixed; left: 0; top: 0; overflow: visible; }
     .bulb { transform-box: fill-box; transform-origin: center; }
     .blink .bulb { animation: twinkle 2.4s ease-in-out infinite; }
     .blink .k1 { animation-delay: -.6s; } .blink .k2 { animation-delay: -1.2s; } .blink .k3 { animation-delay: -1.8s; }
+    .chase .bulb { animation: chase 1.8s ease-in-out infinite; }
     @keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-    @media (prefers-reduced-motion: reduce) { .blink .bulb { animation: none; } }
+    @keyframes chase {
+      0%, 100% { opacity: .32; transform: scale(.92); }
+      22%      { opacity: 1; transform: scale(1.12); }
+      48%      { opacity: .45; transform: scale(.96); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .blink .bulb, .chase .bulb, .orn, .rig-part { animation: none !important; }
+    }
   `;
 
   function ensureStage() {
@@ -126,6 +382,58 @@
 
   // A soft contact shadow so walkers feel planted on the ground.
   const addShadow = (actor) => el("div", { className: "shadow" }, actor);
+
+  // ----------------------------------------------------------- speech bubbles
+  function pickQuote() {
+    const days = santaDaysUntilChristmas();
+    if (days === 0) return "Merry Christmas!";
+    if (days === 1) return "Santa's on the way!";
+    const pool = [
+      "Ho ho ho!",
+      "Stay on the Nice List!",
+      "Nice browsing!",
+      `${days} days to Christmas!`,
+      "Cookies nearby?",
+      "Jingle all the way!",
+    ];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function spawnSpeechBubble(target, customText) {
+    if (!settings.santaActs.quotes && !customText) return;
+    if (!target || !target.isConnected) return;
+    const r = target.getBoundingClientRect();
+    const text = customText || pickQuote();
+    const x = Math.max(95, Math.min(window.innerWidth - 95, r.left + r.width / 2));
+    const y = Math.max(46, r.top - 10);
+    const bubble = el("div", {
+      className: "speech",
+      textContent: text,
+      style: `left:${x}px;top:${y}px;transform:translate(-50%,-100%);`,
+    });
+    bubble
+      .animate(
+        [
+          { transform: "translate(-50%,-85%) scale(.75)", opacity: 0 },
+          { transform: "translate(-50%,-102%) scale(1.03)", opacity: 1, offset: 0.14 },
+          { transform: "translate(-50%,-100%) scale(1)", opacity: 1, offset: 0.82 },
+          { transform: "translate(-50%,-115%) scale(.96)", opacity: 0 },
+        ],
+        { duration: 2400, easing: "ease-out", fill: "forwards" }
+      )
+      .onfinish = () => bubble.remove();
+  }
+
+  // Layered sprite rig: splits legs behind torso/coat using CSS clip-path
+  // so Santa and the reindeer visibly stride/gallop with zero extra image files.
+  function createRiggedSprite(src, width, rigClass, motionClass, parent) {
+    const rig = el("div", { className: `rig ${rigClass} ${motionClass}`, style: `width:${width}px;` }, parent);
+    el("img", { className: "rig-sizer", src, alt: "" }, rig);
+    el("img", { className: "rig-part leg-back", src, alt: "" }, rig);
+    el("img", { className: "rig-part leg-front", src, alt: "" }, rig);
+    el("img", { className: "rig-part torso", src, alt: "" }, rig);
+    return rig;
+  }
 
   // ------------------------------------------------------------ click dance
   const NOTES = ["♪", "♫", "♬"];
@@ -184,7 +492,7 @@
     if (!settings.santaActs.dance) return;
     let dancing = false;
     actor.classList.add("click");
-    actor.title = "Click me!";
+    actor.title = "Click Santa!";
     actor.addEventListener("click", async (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -192,21 +500,27 @@
       dancing = true;
       const trip = getTrip();
       trip?.pause();
-      const idle = body.className;
-      body.className = "";
+      const hadWaddle = body.classList.contains("waddle");
+      const hadGallop = body.classList.contains("gallop");
+      body.classList.remove("waddle", "gallop");
+      Sound.dance();
       spawnNotes(body);
+      spawnSpeechBubble(body);
       await played(body.animate(frames, { duration, easing: "ease-in-out" }), signal);
-      body.className = idle;
+      if (hadWaddle) body.classList.add("waddle");
+      if (hadGallop) body.classList.add("gallop");
       if (trip && trip.playState === "paused" && !signal?.aborted) trip.play();
       dancing = false;
     });
   }
 
-  // -------------------------------------------------------------- candy canes
+  // ------------------------------------------------ candy canes & glitter pop
   let caneSeq = 0;
+  const activeCanes = new Set();
+
   function caneSVG() {
     const id = `cs${++caneSeq}`;
-    return `<svg width="18" height="36" viewBox="0 0 24 48" xmlns="http://www.w3.org/2000/svg">
+    return `<svg width="20" height="40" viewBox="0 0 24 48" xmlns="http://www.w3.org/2000/svg">
       <defs><pattern id="${id}" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
         <rect width="8" height="8" fill="#fff"/><rect width="4" height="8" fill="#d62828"/></pattern></defs>
       <path d="M17 45 V14 a7 7 0 0 0 -14 0" fill="none" stroke="#9b1c1c" stroke-width="7.5" stroke-linecap="round" opacity=".35"/>
@@ -214,32 +528,160 @@
     </svg>`;
   }
 
+  // Peppermint candy-cane glitter burst when a user clicks a candy cane!
+  function spawnCandyGlitter(cx, cy) {
+    const COLORS = ["#d62828", "#ffffff", "#ff4d6d", "#ffe5ec", "#ffd23f", "#ef233c"];
+    const count = 30;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + rand(-0.22, 0.22);
+      const speed = rand(38, 125);
+      const dx = Math.cos(angle) * speed;
+      const dy = Math.sin(angle) * speed - rand(18, 48);
+      const drop = rand(25, 75);
+      const roll = Math.random();
+      const shape = roll < 0.34 ? "star" : roll < 0.62 ? "stripe" : roll < 0.84 ? "shard" : "dot";
+      const size =
+        shape === "star" ? rand(9, 15) : shape === "stripe" ? rand(7, 12) : rand(4, 8);
+      const color = COLORS[i % COLORS.length];
+      const bgStyle =
+        shape === "stripe"
+          ? ""
+          : `background:${color};box-shadow:0 0 ${shape === "star" ? 8 : 5}px ${color};`;
+
+      const p = el("div", {
+        className: `glitter ${shape}`,
+        style: `left:${cx}px;top:${cy}px;width:${size}px;height:${shape === "shard" ? size * 0.55 : size}px;${bgStyle}`,
+      });
+
+      const spin = rand(-420, 420);
+      p.animate(
+        [
+          { transform: "translate(-50%,-50%) scale(.25) rotate(0deg)", opacity: 1 },
+          {
+            transform: `translate(calc(-50% + ${dx * 0.62}px), calc(-50% + ${dy * 0.62}px)) scale(1.2) rotate(${spin * 0.5}deg)`,
+            opacity: 1,
+            offset: 0.35,
+          },
+          {
+            transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + drop * 0.45}px)) scale(.85) rotate(${spin * 0.8}deg)`,
+            opacity: 0.85,
+            offset: 0.68,
+          },
+          {
+            transform: `translate(calc(-50% + ${dx * 1.12}px), calc(-50% + ${dy + drop}px)) scale(.1) rotate(${spin}deg)`,
+            opacity: 0,
+          },
+        ],
+        { duration: rand(680, 1180), easing: "cubic-bezier(.16,.84,.44,1)", fill: "forwards" }
+      ).onfinish = () => p.remove();
+    }
+  }
+
+  function recordCanePop() {
+    const next = (Number(settings.santaCanesCaught) || 0) + 1;
+    settings.santaCanesCaught = next;
+    try {
+      chrome.storage.sync.set({ santaCanesCaught: next });
+    } catch {
+      // ignore if extension context reloaded
+    }
+    return next;
+  }
+
   function dropCane(x, y) {
-    const cane = el("div", { className: "actor", style: `left:${x}px;top:${y}px;` });
+    const cane = el("div", {
+      className: "cane-actor click",
+      title: "Click to pop into candy cane glitter!",
+      style: `left:${x}px;top:${y}px;`,
+    });
     cane.innerHTML = caneSVG();
-    const ground = window.innerHeight - 6 - Snow.heightAt(x) - 30;
+    const ground = window.innerHeight - 8 - Snow.heightAt(x) - 34;
     const fall = Math.max(0, ground - y);
     const spin = Math.random() < 0.5 ? -1 : 1;
     const land = 80 * spin;
     const drift = rand(-30, 30);
-    cane
-      .animate(
-        [
-          { transform: "translate(0,0) rotate(0)", easing: "cubic-bezier(.5,0,1,1)" },
-          { transform: `translate(${drift}px,${fall}px) rotate(${land + 140 * spin}deg)`, offset: 0.6, easing: "ease-out" },
-          { transform: `translate(${drift * 1.1}px,${fall - 18}px) rotate(${land + 40 * spin}deg)`, offset: 0.75, easing: "ease-in" },
-          { transform: `translate(${drift * 1.2}px,${fall}px) rotate(${land}deg)`, offset: 0.9 },
-          { transform: `translate(${drift * 1.2}px,${fall - 4}px) rotate(${land}deg)`, offset: 0.95 },
-          { transform: `translate(${drift * 1.2}px,${fall}px) rotate(${land}deg)` },
-        ],
-        { duration: 1500, fill: "forwards" }
-      )
-      .onfinish = () => {
-        setTimeout(() => {
-          cane.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1200, fill: "forwards" })
-            .onfinish = () => cane.remove();
-        }, 7000);
-      };
+
+    let fadeTimer = null;
+    let gone = false;
+
+    const record = {
+      el: cane,
+      blown: false,
+      cleanup() {
+        if (gone) return;
+        gone = true;
+        clearTimeout(fadeTimer);
+        activeCanes.delete(record);
+        cane.remove();
+      },
+    };
+    activeCanes.add(record);
+
+    const fallAnim = cane.animate(
+      [
+        { transform: "translate(0,0) rotate(0)", easing: "cubic-bezier(.5,0,1,1)" },
+        { transform: `translate(${drift}px,${fall}px) rotate(${land + 140 * spin}deg)`, offset: 0.6, easing: "ease-out" },
+        { transform: `translate(${drift * 1.1}px,${fall - 18}px) rotate(${land + 40 * spin}deg)`, offset: 0.75, easing: "ease-in" },
+        { transform: `translate(${drift * 1.2}px,${fall}px) rotate(${land}deg)`, offset: 0.9 },
+        { transform: `translate(${drift * 1.2}px,${fall - 4}px) rotate(${land}deg)`, offset: 0.95 },
+        { transform: `translate(${drift * 1.2}px,${fall}px) rotate(${land}deg)` },
+      ],
+      { duration: 1500, fill: "forwards" }
+    );
+
+    fallAnim.onfinish = () => {
+      if (gone || record.blown) return;
+      fadeTimer = setTimeout(() => {
+        if (gone || record.blown) return;
+        cane
+          .animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1200, fill: "forwards" })
+          .onfinish = () => record.cleanup();
+      }, 8500);
+    };
+
+    cane.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (gone) return;
+      const r = cane.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      cane.getAnimations().forEach((a) => a.cancel());
+      record.cleanup();
+      Sound.canePop();
+      spawnCandyGlitter(cx, cy);
+      recordCanePop();
+    });
+  }
+
+  // Send any candy canes in the leaf blower's path tumbling across the screen!
+  function blowCanes(b) {
+    if (!activeCanes.size) return;
+    const reach = 135;
+    const minX = b.dir < 0 ? b.x - reach : b.x - 16;
+    const maxX = b.dir < 0 ? b.x + 16 : b.x + reach;
+    for (const rec of [...activeCanes]) {
+      if (rec.blown || !rec.el.isConnected) continue;
+      const r = rec.el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      if (cx < minX || cx > maxX || r.bottom < window.innerHeight - 130) continue;
+      rec.blown = true;
+      rec.el.getAnimations().forEach((a) => a.cancel());
+      rec.el.style.left = `${r.left}px`;
+      rec.el.style.top = `${r.top}px`;
+      const flyX = b.dir * rand(260, 520);
+      const flyY = -rand(90, 210);
+      rec.el
+        .animate(
+          [
+            { transform: "translate(0,0) rotate(0deg)", opacity: 1 },
+            { transform: `translate(${flyX * 0.55}px,${flyY}px) rotate(${b.dir * 380}deg)`, opacity: 1, offset: 0.55 },
+            { transform: `translate(${flyX}px,${flyY + 95}px) rotate(${b.dir * 720}deg)`, opacity: 0 },
+          ],
+          { duration: rand(700, 1050), easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" }
+        )
+        .onfinish = () => rec.cleanup();
+    }
   }
 
   function scheduleCanes(actor, sackAtBack, total, signal, howMany) {
@@ -259,19 +701,25 @@
   let lastPeekSide = null;
 
   async function actPeek(signal) {
+    const sc = sizeScale();
     const fromLeft =
       lastPeekSide === "left" ? false : lastPeekSide === "right" ? true : Math.random() < 0.5;
     lastPeekSide = fromLeft ? "left" : "right";
 
+    const w = Math.round(200 * sc);
     const actor = el("div", {
       className: "actor",
       style: `bottom:15%;${fromLeft ? "left:0" : "left:auto;right:0"};`,
     });
-    const body = el("img", { src: url("images/peek-santa.webp"), alt: "", style: "width:200px;height:auto;transform-origin:50% 90%;" }, actor);
+    const body = el(
+      "img",
+      { src: url("images/peek-santa.webp"), alt: "", style: `width:${w}px;height:auto;transform-origin:50% 90%;` },
+      actor
+    );
     const flip = fromLeft ? " scaleX(-1)" : "";
-    const hidden = fromLeft ? -220 : 220;
-    const shown = fromLeft ? -50 : 50;
-    const peekOut = fromLeft ? -150 : 150; // first, a cautious half-peek
+    const hidden = Math.round((fromLeft ? -220 : 220) * sc);
+    const shown = Math.round((fromLeft ? -50 : 50) * sc);
+    const peekOut = Math.round((fromLeft ? -150 : 150) * sc); // first, a cautious half-peek
     const trip = actor.animate(
       [
         { transform: `translateX(${hidden}px)${flip}`, easing: "ease-out" },
@@ -303,7 +751,7 @@
 
   async function actWalk(signal) {
     const W = window.innerWidth;
-    const width = Math.round(120 * rand(0.9, 1.15));
+    const width = Math.round(120 * sizeScale() * rand(0.9, 1.15));
     const ltr = Math.random() < 0.5;
     const flip = ltr ? "" : " scaleX(-1)";
     const from = ltr ? -width - 10 : W + 10;
@@ -312,7 +760,7 @@
 
     const actor = el("div", { className: "actor", style: `bottom:${4 + Snow.heightAt(W / 2) * 0.5}px;` });
     addShadow(actor);
-    const body = el("img", { className: "waddle", src: url("images/santa-walk.webp"), alt: "", style: `width:${width}px;height:auto;` }, actor);
+    const body = createRiggedSprite(url("images/santa-walk.webp"), width, "rig-walk", "waddle", actor);
     const trip = actor.animate(
       [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
       { duration, easing: "linear", fill: "forwards" }
@@ -325,21 +773,22 @@
   }
 
   // Twinkling trail behind the sleigh.
-  function sparkle(x, y) {
-    const s = el("div", { className: "spark", style: `left:${x}px;top:${y}px;` });
+  function sparkle(x, y, golden = false) {
+    const s = el("div", { className: "spark" + (golden ? " gold" : ""), style: `left:${x}px;top:${y}px;` });
     s.animate(
       [
         { transform: "scale(.4)", opacity: 0.95 },
-        { transform: `translate(${rand(-6, 6)}px,${rand(8, 22)}px) scale(${rand(0.8, 1.4)})`, opacity: 0 },
+        { transform: `translate(${rand(-8, 8)}px,${rand(8, 24)}px) scale(${rand(0.8, 1.5)})`, opacity: 0 },
       ],
-      { duration: rand(700, 1200), easing: "ease-out" }
+      { duration: rand(700, 1250), easing: "ease-out" }
     ).onfinish = () => s.remove();
   }
 
   async function actSleigh(signal) {
     const W = window.innerWidth;
     const H = window.innerHeight;
-    const width = Math.round(Math.min(320, W * 0.28));
+    const holiday = isChristmasHoliday();
+    const width = Math.round(Math.min(340, W * 0.28) * sizeScale());
     const ltr = Math.random() < 0.5;
     const dir = ltr ? 1 : -1;
     const flip = ltr ? "" : " scaleX(-1)";
@@ -362,18 +811,21 @@
     }
 
     const actor = el("div", { className: "actor", style: `bottom:${6 + Snow.heightAt(W / 2) * 0.5}px;` });
-    const body = el("img", { className: "gallop", src: url("images/sleigh.webp"), alt: "", style: `width:${width}px;height:auto;` }, actor);
+    const body = createRiggedSprite(url("images/sleigh.webp"), width, "rig-sleigh", "gallop", actor);
     const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
+    Sound.sleigh();
     makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1100);
-    scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, Math.random() < 0.5 ? 1 : 0);
+    scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, holiday ? 2 : Math.random() < 0.5 ? 1 : 0);
 
     const trail = setInterval(() => {
       if (!actor.isConnected || trip.playState !== "running") return;
       const r = actor.getBoundingClientRect();
       if (r.bottom > H - 8 - 0.05 * r.height && trip.currentTime < duration * 0.14) return; // still on the ground
       const bx = ltr ? r.left + r.width * 0.06 : r.right - r.width * 0.06;
-      if (Math.random() < 0.35) sparkle(bx, r.top + r.height * rand(0.55, 0.8));
-    }, 70);
+      if (Math.random() < (holiday ? 0.72 : 0.35)) {
+        sparkle(bx, r.top + r.height * rand(0.5, 0.82), holiday);
+      }
+    }, 65);
     // Snow flying off the runners the whole way, a big spray on take-off.
     const powder = setInterval(() => {
       if (!actor.isConnected || trip.playState !== "running") return;
@@ -389,6 +841,177 @@
       clearInterval(powder);
       actor.remove();
     }
+  }
+
+  // Handcrafted festive countdown sign held by Santa (accurate to browser local date).
+  let signSeq = 0;
+  function countdownSignSVG(days) {
+    const id = `sg${++signSeq}`;
+    const isDay = days === 0;
+    const isEve = days === 1;
+    const headline = isDay ? "MERRY" : String(days);
+    const sub1 = isDay ? "CHRISTMAS!" : isEve ? "day until" : "days to";
+    const sub2 = isDay ? "Ho Ho Ho!" : "Christmas!";
+    const headlineSize = isDay ? 22 : days >= 100 ? 34 : 40;
+
+    return `<svg class="sign-board" width="154" height="148" viewBox="0 0 154 148" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="${id}" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="10" height="10" fill="#ffffff"/>
+          <rect width="5" height="10" fill="#c1121f"/>
+        </pattern>
+        <linearGradient id="${id}p" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#fffdf8"/>
+          <stop offset="1" stop-color="#fef3c7"/>
+        </linearGradient>
+      </defs>
+      <!-- Wooden handle post -->
+      <rect x="70" y="96" width="14" height="52" rx="4" fill="#8b5a2b" stroke="#5c3a1d" stroke-width="2"/>
+      <!-- Candy-cane border frame -->
+      <rect x="6" y="10" width="142" height="94" rx="14" fill="url(#${id})" stroke="#991b1b" stroke-width="2"/>
+      <!-- Warm snow-cream sign board -->
+      <rect x="13" y="17" width="128" height="80" rx="9" fill="url(#${id}p)" stroke="#e5c799" stroke-width="1.5"/>
+      <!-- Holly corner accent -->
+      <g transform="translate(126,18)">
+        <ellipse cx="-8" cy="2" rx="9" ry="4.5" transform="rotate(-24)" fill="#15803d"/>
+        <ellipse cx="6" cy="5" rx="9" ry="4.5" transform="rotate(28)" fill="#16a34a"/>
+        <circle cx="-1" cy="3" r="3.6" fill="#dc2626"/>
+        <circle cx="4" cy="0" r="3" fill="#ef4444"/>
+        <circle cx="-2" cy="-2" r="2.6" fill="#b91c1c"/>
+      </g>
+      <!-- Countdown text -->
+      <text x="77" y="${isDay ? 50 : 57}" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif"
+            font-weight="900" font-size="${headlineSize}" fill="#c1121f">${headline}</text>
+      <text x="77" y="${isDay ? 72 : 74}" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif"
+            font-weight="700" font-size="13.5" fill="#1e293b">${sub1}</text>
+      <text x="77" y="89" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif"
+            font-weight="800" font-size="13.5" fill="#15803d">${sub2}</text>
+    </svg>`;
+  }
+
+  // Santa pops up from the bottom holding the live Christmas countdown sign.
+  async function actSign(signal) {
+    const sc = sizeScale();
+    const W = window.innerWidth;
+    const days = santaDaysUntilChristmas();
+    const onRight = Math.random() < 0.6;
+    const xPos = onRight
+      ? Math.max(20, W - Math.round(285 * sc) - rand(16, 48))
+      : rand(16, Math.min(64, Math.max(20, W - 300)));
+
+    const actor = el("div", {
+      className: "actor",
+      style: `left:${xPos}px;bottom:0;`,
+    });
+    const wrap = el("div", { className: "sign-wrap" }, actor);
+
+    const signHolder = el("div", {
+      className: "sign-rock",
+      style: `transform-origin:50% 100%;margin-right:${Math.round(-22 * sc)}px;margin-bottom:${Math.round(14 * sc)}px;transform:scale(${sc});`,
+    }, wrap);
+    signHolder.innerHTML = countdownSignSVG(days);
+
+    const santaW = Math.round(118 * sc);
+    const body = el(
+      "img",
+      {
+        src: url("images/santa-walk.webp"),
+        alt: "",
+        style: `width:${santaW}px;height:auto;transform:scaleX(-1);`,
+      },
+      wrap
+    );
+
+    const hiddenY = Math.round(220 * sc);
+    const trip = actor.animate(
+      [
+        { transform: `translateY(${hiddenY}px)`, easing: "cubic-bezier(.22,1.28,.36,1)" },
+        { transform: "translateY(4px)", offset: 0.16 },
+        { transform: "translateY(4px)", offset: 0.84, easing: "cubic-bezier(.55,0,.75,.2)" },
+        { transform: `translateY(${hiddenY}px)` },
+      ],
+      { duration: 7400, fill: "forwards" }
+    );
+
+    Sound.sign();
+    if (days <= 1) {
+      sleep(900, signal).then(() => {
+        if (signal.aborted || !signHolder.isConnected) return;
+        const r = signHolder.getBoundingClientRect();
+        for (let i = 0; i < 10; i++) {
+          setTimeout(() => {
+            if (signal.aborted || !signHolder.isConnected) return;
+            sparkle(r.left + rand(0, r.width), r.top + rand(0, r.height * 0.6), true);
+          }, i * 110);
+        }
+      });
+    }
+
+    makeDanceable(actor, wrap, () => trip, signal, HOP_FRAMES, 1200);
+    await played(trip, signal);
+    actor.remove();
+  }
+
+  // Santa rappels down briefly from the top edge on a peppermint-striped rope!
+  let ropeSeq = 0;
+  function ropeSVG(height) {
+    const id = `rp${++ropeSeq}`;
+    return `<svg width="16" height="${height}" viewBox="0 0 16 ${height}" xmlns="http://www.w3.org/2000/svg" style="margin:0 auto;">
+      <defs>
+        <pattern id="${id}" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="10" height="10" fill="#ffffff"/>
+          <rect width="5" height="10" fill="#d62828"/>
+        </pattern>
+      </defs>
+      <rect x="5" y="0" width="6" height="${height}" rx="3" fill="url(#${id})" stroke="#991b1b" stroke-width="1"/>
+    </svg>`;
+  }
+
+  async function actDrop(signal) {
+    const sc = sizeScale();
+    const W = window.innerWidth;
+    const santaW = Math.round(115 * sc);
+    const ropeH = Math.round(120 * sc);
+    const xPos = rand(Math.max(24, W * 0.14), Math.max(40, W * 0.86 - santaW));
+
+    const actor = el("div", {
+      className: "actor",
+      style: `left:${xPos}px;top:0;`,
+    });
+    const swinger = el("div", { className: "sway", style: "display:flex;flex-direction:column;align-items:center;" }, actor);
+    const rope = el("div", {}, swinger);
+    rope.innerHTML = ropeSVG(ropeH);
+    const body = el(
+      "img",
+      {
+        src: url("images/santa-walk.webp"),
+        alt: "",
+        style: `width:${santaW}px;height:auto;margin-top:${Math.round(-12 * sc)}px;`,
+      },
+      swinger
+    );
+
+    const hiddenY = -(ropeH + Math.round(160 * sc));
+    const shownY = Math.round(-22 * sc);
+    const trip = actor.animate(
+      [
+        { transform: `translateY(${hiddenY}px)`, easing: "cubic-bezier(.22,1.25,.36,1)" },
+        { transform: `translateY(${shownY}px)`, offset: 0.2 },
+        { transform: `translateY(${shownY + 8}px)`, offset: 0.5 },
+        { transform: `translateY(${shownY}px)`, offset: 0.8, easing: "cubic-bezier(.55,0,.75,.2)" },
+        { transform: `translateY(${hiddenY}px)` },
+      ],
+      { duration: 6800, fill: "forwards" }
+    );
+
+    sleep(1800, signal).then(() => {
+      if (signal.aborted || !body.isConnected) return;
+      if (Math.random() < 0.7) spawnSpeechBubble(body);
+    });
+
+    makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1200);
+    await played(trip, signal);
+    actor.remove();
   }
 
   // A soft, layered cloud with a slightly grey underside.
@@ -413,6 +1036,7 @@
   // Snow per second for each click count: 1 click hides the cloud, then the
   // more you click before stopping, the harder it snows (light ... blizzard).
   const CLOUD_RATES = [7, 0, 16, 28, 45, 70, 100, 140];
+
   async function actCloud(signal) {
     const W = window.innerWidth;
     const ltr = Math.random() < 0.5;
@@ -420,7 +1044,7 @@
     const to = ltr ? W + 10 : -130;
     const actor = el("div", {
       className: "actor click",
-      title: "Click once to send the cloud away. Click several times for more snow.",
+      title: "Click once to send the cloud away. Click several times for more snow!",
       style: `top:${rand(6, 14)}vh;filter:drop-shadow(0 4px 6px rgba(40,60,90,.16));opacity:.97;`,
     });
     const body = el("div", { className: "bob" }, actor);
@@ -459,12 +1083,15 @@
             [{ opacity: 1, transform: "scale(1)", filter: "blur(0)" },
              { opacity: 0, transform: "scale(1.35, 1.15)", filter: "blur(6px)" }],
             { duration: 450, easing: "ease-out", fill: "forwards" }
-          ).onfinish = () => trip.finish();
+          ).onfinish = () => {
+            if (trip.playState !== "idle" && !signal.aborted) trip.finish();
+          };
           return;
         }
         // Several clicks: snow harder (each new burst adds on), and keep dumping all the way across.
         level = Math.min(CLOUD_RATES.length - 1, level ? level + n : n);
         emitter.rate = CLOUD_RATES[level];
+        Sound.cloud(level);
         // Heavier snow also lingers longer: the cloud slows down as it dumps.
         trip.updatePlaybackRate(Math.max(0.28, 0.85 - level * 0.09));
         const dark = 1 - level * 0.04;
@@ -486,15 +1113,16 @@
     }
   }
 
-  // Santa wanders out with a (silent!) leaf blower and clears the snow.
+  // Santa wanders out with a (silent or soft-whoosh!) leaf blower and clears the snow + canes.
   let blowing = false;
   let blowerCtl = null;
+
   async function actBlower(signal, fromX) {
     if (blowing) return;
     blowing = true;
     try {
       const W = window.innerWidth;
-      const width = Math.round(150 * rand(0.95, 1.08));
+      const width = Math.round(150 * sizeScale() * rand(0.95, 1.08));
       // Start from the side nearest the click so that pile goes first.
       const ltr = fromX == null ? Math.random() < 0.5 : fromX < W / 2;
       const flip = ltr ? "" : " scaleX(-1)";
@@ -505,15 +1133,16 @@
       const actor = el("div", { className: "actor", style: "bottom:2px;" });
       addShadow(actor);
       const shaker = el("div", { className: "rumble" }, actor);
-      const body = el("img", { className: "waddle", src: url("images/santa-blower.webp"), alt: "", style: `width:${width}px;height:auto;` }, shaker);
+      const body = createRiggedSprite(url("images/santa-blower.webp"), width, "rig-blower", "waddle", shaker);
       const trip = actor.animate(
         [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
         { duration, easing: "linear", fill: "forwards" }
       );
+      Sound.blower();
       makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1200);
 
       // The nozzle points ahead of him (image's right edge, 84% down when facing right),
-      // so he pushes the snow away in front of him.
+      // so he pushes the snow and any resting candy canes away in front of him.
       Snow.setBlower(() => {
         if (!actor.isConnected || trip.playState !== "running") return null;
         const r = body.getBoundingClientRect();
@@ -528,22 +1157,27 @@
       }
     } finally {
       blowing = false;
+      blowerCtl = null;
     }
   }
 
-  const ACTS = { peek: actPeek, walk: actWalk, sleigh: actSleigh, cloud: actCloud, blower: actBlower };
+  const ACTS = {
+    peek: actPeek,
+    walk: actWalk,
+    sleigh: actSleigh,
+    cloud: actCloud,
+    sign: actSign,
+    drop: actDrop,
+    blower: actBlower,
+  };
 
   // Clicking the snow pile: Santa comes to clear it (or it just melts away).
   function onPileClick(x) {
     if (blowing) return;
     if (settings.santaActs.blower) {
-      // Runs alongside whatever else is on screen; it isn't a scheduled act.
       blowerCtl?.abort();
-      const ctl = new AbortController();
-      blowerCtl = ctl;
-      actBlower(ctl.signal, x).catch(() => {}).finally(() => {
-        if (blowerCtl === ctl) blowerCtl = null;
-      });
+      blowerCtl = new AbortController();
+      actBlower(blowerCtl.signal, x).catch(() => {});
     } else {
       Snow.fadePile();
     }
@@ -689,7 +1323,7 @@
         ctx.stroke();
         ctx.restore();
       }
-      // Falling flakes: small and see-through so they don't pull your eye.
+      // Falling flakes
       for (const f of flakes) {
         ctx.globalAlpha = f.a;
         ctx.fillStyle = "#ffffff";
@@ -762,7 +1396,8 @@
 
       const b = blower && blower();
       if (b) {
-        // Blast the snow just behind the nozzle and toss it away.
+        // Blast snow + any resting candy canes in front of the nozzle.
+        blowCanes(b);
         const reach = 110;
         const a = b.dir < 0 ? b.x - reach : b.x - 8;
         const z = b.dir < 0 ? b.x + 8 : b.x + reach;
@@ -814,7 +1449,6 @@
       }
     }
 
-    // A source of falling snow. span() returns {x0, x1, y} or null.
     function emit(span, rate) {
       const em = { span, rate, stop: () => (emitters = emitters.filter((e) => e !== em)) };
       emitters.push(em);
@@ -828,7 +1462,6 @@
       if (fn) wake();
     }
 
-    // Gently melt whatever is left (used after the blower, or when it's off).
     function fadePile() {
       if (fading || !hasPile()) return;
       fading = true;
@@ -847,7 +1480,6 @@
       step();
     }
 
-    // Seed a pile instantly (for the popup's "Try" button when there's no snow yet).
     function seed() {
       ensure();
       for (let i = 0; i < heights.length; i++) heights[i] = Math.max(heights[i], cap(i * COL) * 0.55);
@@ -873,7 +1505,7 @@
     }
 
     window.addEventListener("resize", resize);
-    // Powder thrown up behind the sleigh: drifts back, sinks and fades.
+
     function kick(x, y, dir, n = 3) {
       for (let k = 0; k < n && puffs.length < 260; k++) {
         puffs.push({
@@ -884,49 +1516,65 @@
       wake();
     }
 
-    // Flakes still in the air melt away before they land.
     function evaporate() {
       flakes.forEach((f) => (f.evap = true));
       if (flakes.length) wake();
     }
 
-    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick, evaporate };
-  })();
+    function setHover(mx, my) {
+      if (!canvas) return;
+      const over = mx >= 0 && my >= 0 && hasPile() && heightAt(mx) > 2 && my >= H - heightAt(mx) - 10;
+      canvas.classList.toggle("back", over);
+    }
 
+    return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick, evaporate, setHover };
+  })();
 
   // ------------------------------------------------------------- decorations
   // Lights around the edge of the window and half a snowy pine in each bottom
   // corner. Purely decorative: never catches a click, hidden in fullscreen.
   const Decor = (() => {
     let box = null, resizeT = null, trees = [], hoverRaf = 0, mx = -1, my = -1;
-    const COLORS = ["#ff3b3b", "#2ecc40", "#ffd23f", "#3b8bff"];
+    const PALETTES = {
+      classic: ["#ff3b3b", "#2ecc40", "#ffd23f", "#3b8bff"],
+      warm: ["#ffe8a3", "#ffd166", "#ffb703", "#fff4cc"],
+      icy: ["#e0f2fe", "#7dd3fc", "#38bdf8", "#ffffff"],
+      candy: ["#ef233c", "#ffffff", "#ff4d6d", "#f8fafc"],
+    };
     const NS = "http://www.w3.org/2000/svg";
 
+    function resolveLightMode() {
+      if (settings.santaDecor.lightMode) return settings.santaDecor.lightMode;
+      return settings.santaDecor.blink ? "twinkle" : "steady";
+    }
+
     function lights(W, H) {
+      const mode = resolveLightMode();
+      const palette = PALETTES[settings.santaDecor.lightStyle] || PALETTES.classic;
       const svg = document.createElementNS(NS, "svg");
-      svg.setAttribute("class", "lights" + (settings.santaDecor.blink ? " blink" : ""));
+      const cls = mode === "chase" ? "lights chase" : mode === "twinkle" ? "lights blink" : "lights";
+      svg.setAttribute("class", cls);
       svg.setAttribute("width", W);
       svg.setAttribute("height", H);
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
       const m = 1.5, gap = 44, sag = 4;
-      // Corner-to-corner perimeter, clockwise from top-left.
       const sides = [[m, m, W - m, m], [W - m, m, W - m, H - m], [W - m, H - m, m, H - m], [m, H - m, m, m]];
       let d = "", bulbs = "", k = 0;
       for (const [x0, y0, x1, y1] of sides) {
         const len = Math.hypot(x1 - x0, y1 - y0);
         const n = Math.max(1, Math.round(len / gap));
         const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
-        const nx = -uy, ny = ux; // inward normal (clockwise path)
+        const nx = -uy, ny = ux;
         d += `M${x0},${y0}`;
         for (let i = 1; i <= n; i++) {
           const ax = x0 + ((x1 - x0) * i) / n, ay = y0 + ((y1 - y0) * i) / n;
-          const mx = x0 + ((x1 - x0) * (i - 0.5)) / n, my = y0 + ((y1 - y0) * (i - 0.5)) / n;
-          d += ` Q${mx + nx * sag * 2},${my + ny * sag * 2} ${ax},${ay}`;
-          // Bulb hangs at the low point of each scallop, pointing inward.
-          const bx = mx + nx * (sag + 2), by = my + ny * (sag + 2);
+          const bmx = x0 + ((x1 - x0) * (i - 0.5)) / n, bmy = y0 + ((y1 - y0) * (i - 0.5)) / n;
+          d += ` Q${bmx + nx * sag * 2},${bmy + ny * sag * 2} ${ax},${ay}`;
+          const bx = bmx + nx * (sag + 2), by = bmy + ny * (sag + 2);
           const ang = (Math.atan2(ny, nx) * 180) / Math.PI - 90;
-          const c = COLORS[k % 4];
-          bulbs += `<g class="bulb k${k % 4}" transform="translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${ang.toFixed(0)})">` +
+          const c = palette[k % palette.length];
+          const delayStyle = mode === "chase" ? ` style="animation-delay:${((k % 12) * -0.15).toFixed(2)}s"` : "";
+          bulbs += `<g class="bulb k${k % 4}"${delayStyle} transform="translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${ang.toFixed(0)})">` +
             `<rect x="-2.6" y="-6" width="5.2" height="4" rx="1" fill="#3a4a3a"/>` +
             `<ellipse cx="0" cy="3" rx="4" ry="6" fill="${c}" filter="url(#glow)"/>` +
             `<ellipse cx="-1.3" cy="1" rx="1.1" ry="2" fill="#fff" opacity=".55"/></g>`;
@@ -940,8 +1588,44 @@
       return svg;
     }
 
+    function treeOrnamentsSVG(side) {
+      const palette = PALETTES[settings.santaDecor.lightStyle] || PALETTES.classic;
+      // Place baubles on the visible inward half of each corner pine.
+      const pts =
+        side === "l"
+          ? [
+              [58, 30], [66, 46], [56, 56], [74, 65], [62, 74], [80, 82], [68, 88],
+            ]
+          : [
+              [42, 30], [34, 46], [44, 56], [26, 65], [38, 74], [20, 82], [32, 88],
+            ];
+      const dots = pts
+        .map(([x, y], i) => {
+          const c = palette[i % palette.length];
+          return `<circle class="orn d${i % 4}" cx="${x}" cy="${y}" r="3.4" fill="${c}" filter="url(#oglow)"/>` +
+            `<circle cx="${x - 1}" cy="${y - 1}" r="1.1" fill="#ffffff" opacity=".75"/>`;
+        })
+        .join("");
+      return `<svg class="tree-ornaments" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs><filter id="oglow" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="1.8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter></defs>${dots}</svg>`;
+    }
+
+    function createTree(side) {
+      const wrap = el("div", { className: `tree-wrap ${side}` }, box);
+      el("img", { className: "tree-img", src: url("images/pine.webp"), alt: "" }, wrap);
+      if (settings.santaDecor.ornaments) {
+        const orn = el("div", { style: "position:absolute;inset:0;pointer-events:none;" }, wrap);
+        orn.innerHTML = treeOrnamentsSVG(side);
+      }
+      return wrap;
+    }
+
     function render() {
-      const want = settings.santaEnabled && !document.fullscreenElement &&
+      const want =
+        isActiveHere() &&
+        !document.fullscreenElement &&
         (settings.santaDecor.lights || settings.santaDecor.trees);
       box?.remove();
       box = null;
@@ -952,16 +1636,10 @@
       layer.prepend(box);
       if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
       if (settings.santaDecor.trees) {
-        trees = [
-          el("img", { className: "tree l", src: url("images/pine.webp"), alt: "" }, box),
-          el("img", { className: "tree r", src: url("images/pine.webp"), alt: "" }, box),
-        ];
+        trees = [createTree("l"), createTree("r")];
       }
     }
 
-    // Trees never catch clicks, so hover is worked out from the pointer
-    // position: inside a tree's cone, it fades back and the page behind is
-    // plain to see and click. Uses the full-size rect even while faded.
     function overTree(t) {
       const r = t.getBoundingClientRect();
       const fullH = r.height / (t.classList.contains("back") ? 0.9 : 1);
@@ -969,14 +1647,15 @@
       const left = t.classList.contains("l") ? r.left : r.right - fullW;
       const top = r.bottom - fullH;
       if (mx < left || mx > left + fullW || my < top || my > r.bottom) return false;
-      const cx = left + fullW / 2, depth = (my - top) / fullH; // 0 at tip, 1 at base
+      const cx = left + fullW / 2, depth = (my - top) / fullH;
       return Math.abs(mx - cx) <= (fullW / 2) * Math.min(1, 0.15 + depth * 1.05) + 12;
     }
     function checkHover() {
       hoverRaf = 0;
       for (const t of trees) t.classList.toggle("back", mx >= 0 && overTree(t));
+      Snow.setHover(mx, my);
     }
-    function queueHover() { if (trees.length && !hoverRaf) hoverRaf = requestAnimationFrame(checkHover); }
+    function queueHover() { if ((trees.length || Snow.hasPile()) && !hoverRaf) hoverRaf = requestAnimationFrame(checkHover); }
     document.addEventListener("mousemove", (e) => { mx = e.clientX; my = e.clientY; queueHover(); }, { passive: true, capture: true });
     document.addEventListener("mouseleave", () => { mx = my = -1; queueHover(); });
     window.addEventListener("blur", () => { mx = my = -1; queueHover(); });
@@ -991,9 +1670,8 @@
   })();
 
   // ---------------------------------------------------------------- scheduler
-  // The countdown only runs while this tab is visible, so background tabs
-  // never "save up" a Santa and nothing fires on a page you aren't looking at.
   let timerId = null;
+  let snoozeWakeId = null;
   let remaining = 0;
   let timerStartedAt = 0;
   let current = null; // AbortController for the act on screen
@@ -1014,7 +1692,7 @@
   function armTimer() {
     clearTimeout(timerId);
     timerId = null;
-    if (!settings.santaEnabled || document.visibilityState !== "visible") return;
+    if (!isActiveHere() || document.visibilityState !== "visible") return;
     timerStartedAt = performance.now();
     timerId = setTimeout(fire, remaining);
   }
@@ -1031,11 +1709,24 @@
     armTimer();
   }
 
+  function armSnoozeWake() {
+    clearTimeout(snoozeWakeId);
+    snoozeWakeId = null;
+    if (!settings.santaEnabled || isSitePaused()) return;
+    const wait = Number(settings.santaSnoozeUntil) - Date.now();
+    if (wait > 0) {
+      snoozeWakeId = setTimeout(() => {
+        snoozeWakeId = null;
+        if (isActiveHere()) {
+          Decor.render();
+          schedule();
+        }
+      }, Math.min(wait + 250, 2147483647));
+    }
+  }
+
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
-  // Only the window you're actually using gets Santa. If this one isn't
-  // focused when its turn comes, wait until you come back to it, then ask the
-  // background whether another window had Santa recently.
   let waitingForFocus = false;
   function mayShow() {
     const [lo] = FREQ_MINUTES[settings.santaFreq] || FREQ_MINUTES[3];
@@ -1046,13 +1737,14 @@
           res(Boolean(r?.ok));
         });
       } catch (e) {
-        res(false); // extension was reloaded; this old copy stays quiet
+        res(false);
       }
     });
   }
 
   async function fire() {
     timerId = null;
+    if (!isActiveHere()) return;
     if (!document.hasFocus()) {
       waitingForFocus = true;
       return;
@@ -1061,13 +1753,13 @@
     const quiet = document.fullscreenElement || reducedMotion?.matches || current;
     const act = quiet ? null : pickAct();
     if (act && (await mayShow())) await run(act);
-    schedule();
+    if (isActiveHere()) schedule();
   }
 
   window.addEventListener("focus", () => {
-    if (!waitingForFocus || !settings.santaEnabled) return;
+    if (!waitingForFocus || !isActiveHere()) return;
     waitingForFocus = false;
-    remaining = rand(2, 5) * 1000; // a beat after you return, not instantly
+    remaining = rand(2, 5) * 1000;
     armTimer();
   });
 
@@ -1099,6 +1791,7 @@
     current = null;
     blowerCtl?.abort();
     blowerCtl = null;
+    for (const rec of [...activeCanes]) rec.cleanup();
     Snow.clear();
     host?.remove();
     host = root = layer = null;
@@ -1118,28 +1811,42 @@
   }
 
   load(() => {
+    armSnoozeWake();
     Decor.render();
-    if (settings.santaEnabled) schedule();
+    if (isActiveHere()) schedule();
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "sync") return;
-    const wasEnabled = settings.santaEnabled;
+    const keys = Object.keys(changes);
+    if (keys.length === 1 && keys[0] === "santaCanesCaught") {
+      settings.santaCanesCaught = Number(changes.santaCanesCaught.newValue) || 0;
+      return;
+    }
+    const wasActive = isActiveHere();
     const oldFreq = settings.santaFreq;
     load(() => {
-      if (!settings.santaEnabled) return stopAll();
+      armSnoozeWake();
+      const nowActive = isActiveHere();
+      if (!nowActive) return stopAll();
       Decor.render();
-      if (!wasEnabled || oldFreq !== settings.santaFreq) schedule();
+      if (!wasActive || oldFreq !== settings.santaFreq) schedule();
     });
   });
 
   // "Try it now" buttons in the popup.
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type !== "santa-summon") return;
+    if (!isActiveHere()) return reply({ ok: false, paused: true });
     if (msg.act === "blower") {
       if (!Snow.hasPile()) Snow.seed();
       onPileClick(null);
-    } else if (ACTS[msg.act]) run(msg.act);
+    } else if (msg.act === "cane") {
+      ensureStage();
+      dropCane(rand(window.innerWidth * 0.25, window.innerWidth * 0.75), rand(60, 140));
+    } else if (ACTS[msg.act]) {
+      run(msg.act);
+    }
     reply({ ok: true });
   });
 })();

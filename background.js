@@ -1,21 +1,41 @@
 importScripts("settings.js");
 
 const KEY = "santaEnabled";
+const SNOOZE_KEY = "santaSnoozeUntil";
+const SNOOZE_ALARM = "santa-snooze-end";
 
-function setBadge(enabled) {
-  chrome.action.setBadgeText({ text: enabled ? "ON" : "OFF" });
-  chrome.action.setBadgeBackgroundColor({ color: enabled ? "#16a34a" : "#dc2626" });
+function setBadge(enabled, snoozeUntil = 0) {
+  chrome.alarms?.clear(SNOOZE_ALARM);
+  const now = Date.now();
+  if (!enabled) {
+    chrome.action.setBadgeText({ text: "OFF" });
+    chrome.action.setBadgeBackgroundColor({ color: "#dc2626" });
+    return;
+  }
+  if (snoozeUntil > now) {
+    chrome.action.setBadgeText({ text: "ZZZ" });
+    chrome.action.setBadgeBackgroundColor({ color: "#d97706" });
+    chrome.alarms?.create(SNOOZE_ALARM, { when: snoozeUntil + 250 });
+    return;
+  }
+  chrome.action.setBadgeText({ text: "ON" });
+  chrome.action.setBadgeBackgroundColor({ color: "#16a34a" });
 }
 
 function refreshBadge() {
-  chrome.storage.sync.get({ [KEY]: SANTA_DEFAULTS.santaEnabled }, (data) => setBadge(Boolean(data[KEY])));
+  chrome.storage.sync.get({ [KEY]: SANTA_DEFAULTS.santaEnabled, [SNOOZE_KEY]: 0 }, (data) =>
+    setBadge(Boolean(data[KEY]), Number(data[SNOOZE_KEY]) || 0)
+  );
 }
 
 chrome.runtime.onInstalled.addListener(refreshBadge);
 chrome.runtime.onStartup?.addListener(refreshBadge);
+chrome.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name === SNOOZE_ALARM) refreshBadge();
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && changes[KEY]) setBadge(Boolean(changes[KEY].newValue));
+  if (area === "sync" && (changes[KEY] || changes[SNOOZE_KEY])) refreshBadge();
 });
 
 // Only one window shows Santa: the focused one, and not again in another

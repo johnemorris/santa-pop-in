@@ -13,7 +13,15 @@
       </label>
     </header>
 
+    <div id="countdown" class="countdown"></div>
+
     <section id="body">
+      <div class="quick-row">
+        <button id="pauseSiteBtn" type="button" class="pill-btn">Pause site</button>
+        <button id="snoozeBtn" type="button" class="pill-btn">Snooze 1h</button>
+      </div>
+      <div id="pauseNote" class="pause-note" hidden></div>
+
       <div class="label row">
         <span>How often</span>
         <span id="freqText" class="muted"></span>
@@ -21,34 +29,70 @@
       <input id="freq" type="range" min="1" max="5" step="1" />
       <div class="row muted small"><span>Rare</span><span>Often</span></div>
 
+      <div class="row compact-bar">
+        <div class="size-group">
+          <span class="label inline">Size</span>
+          <div class="seg" role="group" aria-label="Santa size">
+            <button type="button" data-size="1">S</button>
+            <button type="button" data-size="2">M</button>
+            <button type="button" data-size="3">L</button>
+          </div>
+        </div>
+        <label class="sound-toggle">
+          <input id="sound" type="checkbox" />
+          <span>Soft sounds</span>
+        </label>
+      </div>
+
       <div class="label">What Santa gets up to</div>
       <div class="acts">
         <label><input type="checkbox" data-act="peek" /> Peeks in from the side</label>
         <label><input type="checkbox" data-act="walk" /> Strolls across the bottom</label>
         <label><input type="checkbox" data-act="sleigh" /> Reindeer sleigh ride</label>
-        <label><input type="checkbox" data-act="cloud" /> Snow cloud (click it more for more snow)</label>
-        <label><input type="checkbox" data-act="canes" /> Drops candy canes</label>
+        <label><input type="checkbox" data-act="cloud" /> Snow cloud (click more for blizzard)</label>
+        <label><input type="checkbox" data-act="sign" /> Christmas countdown sign</label>
+        <label><input type="checkbox" data-act="drop" /> Top-edge candy-rope drop</label>
+        <label><input type="checkbox" data-act="canes" /> Candy canes (click to glitter-pop!)</label>
         <label><input type="checkbox" data-act="dance" /> Dances when you click him</label>
-        <label><input type="checkbox" data-act="blower" /> Leaf blower clears the snow</label>
+        <label><input type="checkbox" data-act="quotes" /> Festive speech bubbles</label>
+        <label><input type="checkbox" data-act="blower" /> Leaf blower clears snow &amp; canes</label>
       </div>
 
       <div class="label">Decorations</div>
       <div class="acts">
         <label><input type="checkbox" data-decor="lights" /> Christmas lights around the edge</label>
-        <label class="sub"><input type="checkbox" data-decor="blink" /> Lights twinkle</label>
+        <div id="lightOpts" class="sub-opts">
+          <select id="lightStyle" aria-label="Light colors">
+            <option value="classic">Classic</option>
+            <option value="warm">Warm white</option>
+            <option value="icy">Icy blue</option>
+            <option value="candy">Candy cane</option>
+          </select>
+          <select id="lightMode" aria-label="Light pattern">
+            <option value="twinkle">Twinkle</option>
+            <option value="chase">Chase wave</option>
+            <option value="steady">Steady glow</option>
+          </select>
+        </div>
         <label><input type="checkbox" data-decor="trees" /> Snowy pine trees in the corners</label>
+        <label class="sub"><input type="checkbox" data-decor="ornaments" /> Glowing ornaments on pines</label>
       </div>
 
       <div class="label">Try it now</div>
       <div class="try">
-        <button data-try="peek">Peek</button>
-        <button data-try="walk">Walk</button>
-        <button data-try="sleigh">Sleigh</button>
-        <button data-try="cloud">Cloud</button>
-        <button data-try="blower">Blower</button>
+        <button type="button" data-try="peek">Peek</button>
+        <button type="button" data-try="walk">Walk</button>
+        <button type="button" data-try="sleigh">Sleigh</button>
+        <button type="button" data-try="cloud">Cloud</button>
+        <button type="button" data-try="sign">Sign</button>
+        <button type="button" data-try="drop">Drop</button>
+        <button type="button" data-try="cane">Cane</button>
+        <button type="button" data-try="blower">Blower</button>
       </div>
       <div id="tryMsg" class="muted small"></div>
     </section>
+
+    <div id="caneStat" class="cane-stat" hidden></div>
 
     <footer>
       <a id="tipLink" class="tip" target="_blank" rel="noopener" hidden>Enjoying it? Buy me a coffee ☕</a>
