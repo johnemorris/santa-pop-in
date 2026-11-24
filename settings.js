@@ -62,6 +62,6 @@ function santaDaysUntilChristmas(now = new Date()) {
   return Math.round((target - today) / 86400000);
 }
 
-// Tip jar (jem6 Ko-fi). Set to "" to hide the coffee link.
+// Tip jar (jem6 Ko-fi). Set to "" to hide the candy-cane tip link.
 const SANTA_TIP_URL = "https://ko-fi.com/jem6com";
 const SANTA_BRAND_URL = "https://jem6.com";
