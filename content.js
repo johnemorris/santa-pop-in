@@ -119,7 +119,7 @@
       walk: (signal) => loopFor("walk-bells", 0.45, signal),
       sign: () => play("sign", 0.7),
       cloud: (level) => play("cloud", 0.4 + Math.min(level, 6) * 0.08),
-      blower: (signal) => loopFor("blower", 0.75, signal), // real petrol leaf blower
+      blower: (signal) => loopFor("blower", 0.225, signal), // real petrol leaf blower, 30% of 1.4.4 level
       stop: stopLoop,
     };
   })();
