@@ -62,7 +62,7 @@
 
   // ------------------------------------------------------------------ audio
   // Optional soft sounds (off by default): real sleigh-bell and ho-ho-ho
-  // recordings (CC0, see sounds/CREDITS.md). The leaf blower is a faint low hum.
+  // recordings (CC0, see sounds/CREDITS.md). Santa's leaf blower is a real backpack blower recording.
   const Sound = (() => {
     const BASE_VOL = 0.35;
     const cache = {};
@@ -119,7 +119,7 @@
       walk: (signal) => loopFor("walk-bells", 0.45, signal),
       sign: () => play("sign", 0.7),
       cloud: (level) => play("cloud", 0.4 + Math.min(level, 6) * 0.08),
-      blower: (signal) => loopFor("blower-hum", 0.35, signal), // faint low vacuum hum
+      blower: (signal) => loopFor("blower", 0.75, signal), // real petrol leaf blower
       stop: stopLoop,
     };
   })();
