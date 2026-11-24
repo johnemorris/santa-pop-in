@@ -102,9 +102,7 @@ const Decor = (() => {
       isActiveHere() &&
       !document.fullscreenElement &&
       (settings.santaDecor.lights || settings.santaDecor.trees);
-    box?.remove();
-    box = null;
-    trees = [];
+    clear();
     if (!want) return;
     ensureStage();
     box = el("div", { className: "decor" });
@@ -113,6 +111,17 @@ const Decor = (() => {
     if (settings.santaDecor.trees) {
       trees = [createTree("l"), createTree("r")];
     }
+  }
+
+  function clear() {
+    clearTimeout(resizeT);
+    resizeT = null;
+    if (hoverRaf) cancelAnimationFrame(hoverRaf);
+    hoverRaf = 0;
+    box?.remove();
+    box = null;
+    trees = [];
+    mx = my = -1;
   }
 
   function overTree(t) {
@@ -141,5 +150,5 @@ const Decor = (() => {
     resizeT = setTimeout(render, 200);
   });
   document.addEventListener("fullscreenchange", render);
-  return { render };
+  return { render, clear };
 })();

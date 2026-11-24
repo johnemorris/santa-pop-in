@@ -8,6 +8,7 @@ let snoozeWakeId = null;
 let remaining = 0;
 let timerStartedAt = 0;
 let current = null; // AbortController for the act on screen
+let scheduleEpoch = 0;
 
 function nextDelay() {
   const [lo, hi] = FREQ_MINUTES[settings.santaFreq] || FREQ_MINUTES[3];
@@ -25,7 +26,7 @@ function pickAct() {
 function armTimer() {
   clearTimeout(timerId);
   timerId = null;
-  if (!isActiveHere() || document.visibilityState !== "visible") return;
+  if (!isActiveHere() || document.visibilityState !== "visible" || document.fullscreenElement || current) return;
   timerStartedAt = performance.now();
   timerId = setTimeout(fire, remaining);
 }
@@ -38,6 +39,7 @@ function pauseTimer() {
 }
 
 function schedule() {
+  scheduleEpoch++;
   remaining = nextDelay();
   armTimer();
 }
@@ -77,7 +79,9 @@ function mayShow() {
 
 async function fire() {
   timerId = null;
-  if (!isActiveHere()) return;
+  if (!chrome.runtime.id) return stopAll();
+  const epoch = scheduleEpoch;
+  if (!isActiveHere() || document.visibilityState !== "visible") return;
   if (!document.hasFocus()) {
     waitingForFocus = true;
     return;
@@ -85,25 +89,44 @@ async function fire() {
   waitingForFocus = false;
   const quiet = document.fullscreenElement || reducedMotion?.matches || current;
   const act = quiet ? null : pickAct();
-  if (act && (await mayShow())) await run(act);
-  if (isActiveHere()) schedule();
+  if (act && (await mayShow())) {
+    // The worker can reply after a disable, pause, focus change, or summon.
+    if (epoch !== scheduleEpoch || !isActiveHere() || current ||
+        document.visibilityState !== "visible" || !document.hasFocus() ||
+        document.fullscreenElement || reducedMotion?.matches) return;
+    await run(act);
+    return;
+  }
+  if (epoch === scheduleEpoch && isActiveHere()) schedule();
 }
 
-window.addEventListener("focus", () => {
-  if (!waitingForFocus || !isActiveHere()) return;
-  waitingForFocus = false;
-  remaining = rand(2, 5) * 1000;
-  armTimer();
-});
+function resume() {
+  // Reloaded/updated extensions invalidate scripts already running in old tabs.
+  // Those tabs need a reload before the new manifest scripts can be injected.
+  if (!chrome.runtime.id) return stopAll();
+  if (!isActiveHere() || document.visibilityState !== "visible" || document.fullscreenElement) return;
+  if (waitingForFocus) {
+    waitingForFocus = false;
+    remaining = rand(2, 5) * 1000;
+  }
+  Decor.render();
+  if (!timerId && !current) armTimer();
+}
+
+window.addEventListener("focus", resume);
 
 // Click into another window mid-act and Santa leaves this one.
 window.addEventListener("blur", () => {
   setTimeout(() => {
-    if (!document.hasFocus() && current) current.abort();
+    if (!document.hasFocus()) { pauseTimer(); stopAll(); }
   }, 400);
 });
 
 async function run(name) {
+  if (!Object.hasOwn(ACTS, name) || !isActiveHere() || document.fullscreenElement) return;
+  scheduleEpoch++;
+  clearTimeout(timerId);
+  timerId = null;
   current?.abort();
   const ctl = new AbortController();
   current = ctl;
@@ -112,11 +135,15 @@ async function run(name) {
   } catch (e) {
     // Never let a page quirk break the schedule.
   } finally {
-    if (current === ctl) current = null;
+    if (current === ctl) {
+      current = null;
+      if (isActiveHere()) schedule();
+    }
   }
 }
 
 function stopAll() {
+  scheduleEpoch++;
   clearTimeout(timerId);
   timerId = null;
   waitingForFocus = false;
@@ -125,19 +152,31 @@ function stopAll() {
   blowerCtl?.abort();
   blowerCtl = null;
   for (const rec of [...activeCanes]) rec.cleanup();
+  Sound.stop();
   Snow.clear();
+  Decor.clear();
   host?.remove();
   host = root = layer = null;
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") armTimer();
-  else pauseTimer();
+  if (document.visibilityState === "visible") resume();
+  else { pauseTimer(); stopAll(); }
 });
+
+document.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement) { pauseTimer(); stopAll(); }
+  else resume();
+});
+window.addEventListener("pagehide", () => { pauseTimer(); stopAll(); });
+window.addEventListener("pageshow", resume);
 
 // ---------------------------------------------------------------- settings
 function load(cb) {
-  chrome.storage.sync.get(SANTA_DEFAULTS, (data) => {
+  // Read raw values before merging: Chrome merges object defaults recursively,
+  // which otherwise masks a legacy blink:false preference with lightMode.
+  chrome.storage.sync.get(null, (data) => {
+    if (chrome.runtime.lastError) return;
     settings = mergeSantaSettings(data);
     cb?.();
   });
@@ -171,14 +210,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // "Try it now" buttons in the popup.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.type !== "santa-summon") return;
-  if (!isActiveHere()) return reply({ ok: false, paused: true });
+  if (!isActiveHere() || document.fullscreenElement) return reply({ ok: false, paused: true });
   if (msg.act === "blower") {
     if (!Snow.hasPile()) Snow.seed();
     onPileClick(null);
   } else if (msg.act === "cane") {
     ensureStage();
     dropCane(rand(window.innerWidth * 0.25, window.innerWidth * 0.75), rand(60, 140));
-  } else if (ACTS[msg.act]) {
+  } else if (Object.hasOwn(ACTS, msg.act)) {
     run(msg.act);
   }
   reply({ ok: true });

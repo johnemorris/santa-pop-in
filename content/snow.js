@@ -62,7 +62,7 @@ const Snow = (() => {
   let emitters = [];
   let blower = null;
   let raf = null, last = 0;
-  let fading = false;
+  let fading = false, fadeTimer = null;
   let hits = [], hitsDirty = false, hitsTimer = null;
 
   function edge(x) {
@@ -319,6 +319,8 @@ const Snow = (() => {
     const em = { span, rate, stop: () => (emitters = emitters.filter((e) => e !== em)) };
     emitters.push(em);
     fading = false;
+    clearTimeout(fadeTimer);
+    fadeTimer = null;
     wake();
     return em;
   }
@@ -340,8 +342,8 @@ const Snow = (() => {
       }
       draw();
       markHits();
-      if (left > 0) setTimeout(step, 40);
-      else fading = false;
+      if (left > 0) fadeTimer = setTimeout(step, 40);
+      else { fading = false; fadeTimer = null; }
     };
     step();
   }
@@ -359,11 +361,14 @@ const Snow = (() => {
     emitters = [];
     blower = null;
     fading = false;
+    clearTimeout(fadeTimer);
+    fadeTimer = null;
     if (raf) cancelAnimationFrame(raf);
     raf = null;
     heights.fill(0);
     clearTimeout(hitsTimer);
     hitsTimer = null;
+    hitsDirty = false;
     hits.forEach((h) => h.remove());
     hits = [];
     canvas?.remove();

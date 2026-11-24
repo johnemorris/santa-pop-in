@@ -225,9 +225,15 @@ function el(tag, props = {}, parent) {
 // Resolve when an animation finishes or the act is aborted.
 function played(anim, signal) {
   return new Promise((resolve) => {
-    anim.onfinish = resolve;
-    anim.oncancel = resolve;
-    signal?.addEventListener("abort", () => anim.cancel());
+    const done = () => {
+      signal?.removeEventListener("abort", abort);
+      anim.onfinish = anim.oncancel = null;
+      resolve();
+    };
+    const abort = () => { anim.cancel(); done(); };
+    anim.onfinish = anim.oncancel = done;
+    if (signal?.aborted) abort();
+    else signal?.addEventListener("abort", abort, { once: true });
   });
 }
 

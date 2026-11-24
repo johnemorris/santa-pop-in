@@ -200,7 +200,12 @@ function recordCanePop() {
   const next = (Number(settings.santaCanesCaught) || 0) + 1;
   settings.santaCanesCaught = next;
   try {
-    chrome.storage.sync.set({ santaCanesCaught: next });
+    // The worker serializes increments from different tabs so sync lag cannot
+    // make two clicks overwrite one another's counter update.
+    chrome.runtime.sendMessage({ type: "santa-cane-pop" }, (response) => {
+      if (chrome.runtime.lastError) return;
+      if (response?.ok) settings.santaCanesCaught = response.count;
+    });
   } catch {
     // ignore if extension context reloaded
   }

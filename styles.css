@@ -1,2 +1,2 @@
-/* Santa renders inside a Shadow DOM (see content.js); this only guards the host element. */
+/* Santa renders inside a Shadow DOM (see content/stage.js); this only guards the host element. */
 santa-pop-in { all: initial; }

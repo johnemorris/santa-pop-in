@@ -420,10 +420,12 @@ async function actCloud(signal) {
 // Santa wanders out with a (silent or soft-whoosh!) leaf blower and clears the snow + canes.
 let blowing = false;
 let blowerCtl = null;
+let blowerOwner = null;
 
 async function actBlower(signal, fromX) {
-  if (blowing) return;
+  if (blowing && !blowerOwner?.aborted) return;
   blowing = true;
+  blowerOwner = signal;
   try {
     const W = window.innerWidth;
     const width = Math.round(150 * sizeScale() * rand(0.95, 1.08));
@@ -449,13 +451,15 @@ async function actBlower(signal, fromX) {
       await played(trip, signal);
     } finally {
       stopHum();
-      Snow.setBlower(null);
-      Snow.fadePile(); // tidy any crumbs he missed
+      if (blowerOwner === signal) {
+        Snow.setBlower(null);
+        if (!signal.aborted) Snow.fadePile(); // tidy any crumbs he missed
+      }
       actor.remove();
     }
   } finally {
-    blowing = false;
-    blowerCtl = null;
+    if (blowerOwner === signal) { blowing = false; blowerOwner = null; }
+    if (blowerCtl?.signal === signal) blowerCtl = null;
   }
 }
 
@@ -471,7 +475,7 @@ const ACTS = {
 
 // Clicking the snow pile: Santa comes to clear it (or it just melts away).
 function onPileClick(x) {
-  if (blowing) return;
+  if (blowing && !blowerOwner?.aborted) return;
   if (settings.santaActs.blower) {
     blowerCtl?.abort();
     blowerCtl = new AbortController();

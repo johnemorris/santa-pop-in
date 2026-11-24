@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
+    <title>Santa Pop-In settings</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -23,7 +24,7 @@
       <div id="pauseNote" class="pause-note" hidden></div>
 
       <div class="label row">
-        <span>How often</span>
+        <label for="freq">How often</label>
         <span id="freqText" class="muted"></span>
       </div>
       <input id="freq" type="range" min="1" max="5" step="1" />
@@ -33,9 +34,9 @@
         <div class="size-group">
           <span class="label inline">Size</span>
           <div class="seg" role="group" aria-label="Santa size">
-            <button type="button" data-size="1">S</button>
-            <button type="button" data-size="2">M</button>
-            <button type="button" data-size="3">L</button>
+            <button type="button" data-size="1" aria-label="Small" aria-pressed="false">S</button>
+            <button type="button" data-size="2" aria-label="Normal" aria-pressed="false">M</button>
+            <button type="button" data-size="3" aria-label="Large" aria-pressed="false">L</button>
           </div>
         </div>
         <label class="sound-toggle">
@@ -89,7 +90,7 @@
         <button type="button" data-try="cane">Cane</button>
         <button type="button" data-try="blower">Blower</button>
       </div>
-      <div id="tryMsg" class="muted small"></div>
+      <div id="tryMsg" class="muted small" role="status" aria-live="polite"></div>
     </section>
 
     <div id="caneStat" class="cane-stat" hidden></div>

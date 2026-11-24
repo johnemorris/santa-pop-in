@@ -22,6 +22,22 @@ let pausedSites = [];
 let snoozeUntil = 0;
 let activeHost = "";
 
+function saveSettings(values) {
+  chrome.storage.sync.set(values, () => {
+    if (chrome.runtime.lastError) {
+      $("#tryMsg").textContent = "Settings could not be saved. Please try again.";
+    }
+  });
+}
+
+function selectSize(size) {
+  sizeButtons.forEach((btn) => {
+    const selected = Number(btn.dataset.size) === size;
+    btn.classList.toggle("active", selected);
+    btn.setAttribute("aria-pressed", String(selected));
+  });
+}
+
 function renderCountdown() {
   const days = santaDaysUntilChristmas();
   if (days === 0) {
@@ -109,7 +125,7 @@ function paint(data) {
   sound.checked = Boolean(merged.santaSound);
 
   const sz = Number(merged.santaSize) || 2;
-  sizeButtons.forEach((btn) => btn.classList.toggle("active", Number(btn.dataset.size) === sz));
+  selectSize(sz);
 
   acts = merged.santaActs;
   actBoxes.forEach((b) => (b.checked = Boolean(acts[b.dataset.act])));
@@ -141,7 +157,13 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   renderPauseState();
 }).catch(() => {});
 
-chrome.storage.sync.get(SANTA_DEFAULTS, paint);
+chrome.storage.sync.get(null, (data) => {
+  if (chrome.runtime.lastError) {
+    $("#tryMsg").textContent = "Settings could not be loaded. Please reopen the popup.";
+    return;
+  }
+  paint(data);
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "sync") return;
@@ -157,7 +179,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 enabled.addEventListener("change", () => {
-  chrome.storage.sync.set({ santaEnabled: enabled.checked });
+  saveSettings({ santaEnabled: enabled.checked });
   body.classList.toggle("off", !enabled.checked);
   body.inert = !enabled.checked;
 });
@@ -169,13 +191,13 @@ pauseSiteBtn.addEventListener("click", () => {
   } else {
     pausedSites = [...pausedSites, activeHost];
   }
-  chrome.storage.sync.set({ santaPausedSites: pausedSites });
+  saveSettings({ santaPausedSites: pausedSites });
   renderPauseState();
 });
 
 snoozeBtn.addEventListener("click", () => {
   snoozeUntil = snoozeUntil > Date.now() ? 0 : Date.now() + 60 * 60 * 1000;
-  chrome.storage.sync.set({ santaSnoozeUntil: snoozeUntil });
+  saveSettings({ santaSnoozeUntil: snoozeUntil });
   renderPauseState();
 });
 
@@ -183,52 +205,58 @@ freq.addEventListener("input", () => {
   freqText.textContent = SANTA_FREQ_TEXT[freq.value] || "";
 });
 freq.addEventListener("change", () => {
-  chrome.storage.sync.set({ santaFreq: Number(freq.value) });
+  saveSettings({ santaFreq: Number(freq.value) });
 });
 
 sizeButtons.forEach((btn) =>
   btn.addEventListener("click", () => {
     const val = Number(btn.dataset.size);
-    sizeButtons.forEach((b) => b.classList.toggle("active", b === btn));
-    chrome.storage.sync.set({ santaSize: val });
+    selectSize(val);
+    saveSettings({ santaSize: val });
   })
 );
 
 sound.addEventListener("change", () => {
-  chrome.storage.sync.set({ santaSound: sound.checked });
+  saveSettings({ santaSound: sound.checked });
 });
 
 actBoxes.forEach((b) =>
   b.addEventListener("change", () => {
     acts[b.dataset.act] = b.checked;
-    chrome.storage.sync.set({ santaActs: acts });
+    saveSettings({ santaActs: acts });
   })
 );
 
 decorBoxes.forEach((b) =>
   b.addEventListener("change", () => {
     decor[b.dataset.decor] = b.checked;
-    chrome.storage.sync.set({ santaDecor: decor });
+    saveSettings({ santaDecor: decor });
     syncSubDecor();
   })
 );
 
 lightStyle.addEventListener("change", () => {
   decor.lightStyle = lightStyle.value;
-  chrome.storage.sync.set({ santaDecor: decor });
+  saveSettings({ santaDecor: decor });
 });
 
 lightMode.addEventListener("change", () => {
   decor.lightMode = lightMode.value;
   decor.blink = lightMode.value !== "steady";
-  chrome.storage.sync.set({ santaDecor: decor });
+  saveSettings({ santaDecor: decor });
 });
 
 document.querySelectorAll("[data-try]").forEach((btn) =>
   btn.addEventListener("click", async () => {
     const msg = $("#tryMsg");
     msg.textContent = "";
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let tab;
+    try {
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    } catch {
+      msg.textContent = "Santa can't access this tab. Please try again.";
+      return;
+    }
     if (!tab?.id) return;
     chrome.tabs.sendMessage(tab.id, { type: "santa-summon", act: btn.dataset.try }, (resp) => {
       if (chrome.runtime.lastError) {

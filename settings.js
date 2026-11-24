@@ -45,12 +45,15 @@ const SANTA_SIZE_TEXT = {
 };
 
 function mergeSantaSettings(data = {}) {
+  const santaDecor = { ...SANTA_DEFAULTS.santaDecor, ...(data.santaDecor || {}) };
+  // Preserve the pre-lightMode "don't blink" preference across upgrades.
+  if (!data.santaDecor?.lightMode && data.santaDecor?.blink === false) santaDecor.lightMode = "steady";
   return {
     ...SANTA_DEFAULTS,
     ...data,
     santaPausedSites: Array.isArray(data.santaPausedSites) ? [...data.santaPausedSites] : [],
     santaActs: { ...SANTA_DEFAULTS.santaActs, ...(data.santaActs || {}) },
-    santaDecor: { ...SANTA_DEFAULTS.santaDecor, ...(data.santaDecor || {}) },
+    santaDecor,
   };
 }
 

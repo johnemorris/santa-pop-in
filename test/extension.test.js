@@ -43,6 +43,7 @@ test("settings.js mergeSantaSettings and santaDaysUntilChristmas", () => {
   assert.equal(merged.santaDecor.trees, true);
   assert.equal(merged.santaDecor.ornaments, true);
   assert.deepEqual(Array.from(merged.santaPausedSites), ["example.com"]);
+  assert.equal(ctx.mergeSantaSettings({ santaDecor: { blink: false } }).santaDecor.lightMode, "steady");
 
   assert.equal(ctx.santaDaysUntilChristmas(new Date(2026, 11, 25)), 0);
   assert.equal(ctx.santaDaysUntilChristmas(new Date(2026, 11, 24)), 1);
@@ -145,6 +146,7 @@ test("popup.js inert state, pause/snooze controls, and settings persistence", as
         contains: (c) => classes.has(c),
       },
       addEventListener: (ev, fn) => { (listeners[ev] ||= []).push(fn); },
+      setAttribute() {},
       dispatch: (ev) => (listeners[ev] || []).forEach((fn) => fn({ target: el })),
       ...extra,
     };
@@ -471,8 +473,9 @@ test("content/core.js Sound.loopFor idempotent stop and crossScreen() helper", a
   const { Sound, crossScreen } = vm.runInContext("({ Sound, crossScreen })", ctx);
   const ac = new AbortController();
   const stop = Sound.walk(ac.signal);
-  ac.abort();
+  stop();
   stop(); // second call must be a no-op (only 1 rAF fade chain)
+  ac.abort();
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(rafCalls, 1);
   assert.equal(pausedCount, 1);

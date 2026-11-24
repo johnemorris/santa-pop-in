@@ -27,11 +27,14 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const sizeScale = () => SIZE_SCALES[settings.santaSize] || 1;
 const sleep = (ms, signal) =>
   new Promise((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    const done = () => {
       clearTimeout(t);
+      signal?.removeEventListener("abort", done);
       resolve();
-    });
+    };
+    const t = setTimeout(done, ms);
+    if (signal?.aborted) done();
+    else signal?.addEventListener("abort", done, { once: true });
   });
 
 function isChristmasHoliday() {
@@ -63,6 +66,7 @@ function isActiveHere() {
 const Sound = (() => {
   const BASE_VOL = 0.35;
   const cache = {};
+  const playing = new Set();
   let loop = null;
 
   function audio(name) {
@@ -77,38 +81,61 @@ const Sound = (() => {
   function play(name, vol = 1) {
     if (!settings.santaSound) return;
     try {
-      const a = audio(name).cloneNode();
-      a.volume = Math.min(1, BASE_VOL * vol);
-      a.play().catch(() => {}); // the page may not allow sound yet
+      track(name, vol); // the page may not allow sound yet
     } catch {
       // ignore audio errors
     }
   }
 
-  // A quiet looping sound tied to an act; returns a stop function that fades it out.
-  function loopFor(name, vol, signal) {
-    stopLoop();
-    if (!settings.santaSound) return () => {};
+  function track(name, vol, signal, looping = false) {
     const a = audio(name).cloneNode();
-    a.loop = true;
+    a.loop = looping;
     a.volume = Math.min(1, BASE_VOL * vol);
-    a.play().catch(() => {});
-    let stopped = false;
-    const me = { a, stop() {
+    let stopped = false, fadeRaf = 0;
+    const abort = () => me.stop(true);
+    const release = () => {
+      signal?.removeEventListener("abort", abort);
+      playing.delete(me);
+      if (loop === me) loop = null;
+    };
+    const me = { stop(immediate = false) {
+      if (immediate) {
+        if (fadeRaf) cancelAnimationFrame(fadeRaf);
+        fadeRaf = 0;
+        a.pause();
+        stopped = true;
+        release();
+        return;
+      }
       if (stopped) return;
       stopped = true;
+      signal?.removeEventListener("abort", abort);
       if (loop === me) loop = null;
       const v0 = a.volume, t0 = performance.now();
       const step = () => {
         const k = Math.min(1, (performance.now() - t0) / 400);
         a.volume = v0 * (1 - k);
-        if (k < 1) requestAnimationFrame(step); else a.pause();
+        if (k < 1) fadeRaf = requestAnimationFrame(step);
+        else { fadeRaf = 0; a.pause(); release(); }
       };
       step();
     } };
-    loop = me;
-    signal?.addEventListener("abort", () => me.stop(), { once: true });
-    return () => me.stop();
+    playing.add(me);
+    a.onended = a.onerror = () => { stopped = true; release(); };
+    signal?.addEventListener("abort", abort, { once: true });
+    a.play().catch(() => me.stop(true));
+    return me;
+  }
+
+  // A quiet looping sound tied to an act; returns a stop function that fades it out.
+  function loopFor(name, vol, signal) {
+    stopLoop();
+    if (!settings.santaSound || signal?.aborted) return () => {};
+    try {
+      const me = track(name, vol, signal, true);
+      loop = me;
+      return () => me.stop();
+    } catch { return () => {}; }
   }
   function stopLoop() { loop?.stop(); }
 
@@ -120,6 +147,6 @@ const Sound = (() => {
     sign: () => play("sign", 0.7),
     cloud: (level) => play("cloud", 0.4 + Math.min(level, 6) * 0.08),
     blower: (signal) => loopFor("blower", 0.075, signal), // real petrol leaf blower, 10% of 1.4.4 level
-    stop: stopLoop,
+    stop: () => { for (const sound of [...playing]) sound.stop(true); },
   };
 })();
