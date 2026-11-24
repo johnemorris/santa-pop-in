@@ -1574,10 +1574,13 @@
           const ang = (Math.atan2(ny, nx) * 180) / Math.PI - 90;
           const c = palette[k % palette.length];
           const delayStyle = mode === "chase" ? ` style="animation-delay:${((k % 12) * -0.15).toFixed(2)}s"` : "";
-          bulbs += `<g class="bulb k${k % 4}"${delayStyle} transform="translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${ang.toFixed(0)})">` +
+          // Position lives on the outer group; the animated inner group may
+          // scale freely without a CSS transform wiping out the placement.
+          bulbs += `<g transform="translate(${bx.toFixed(1)},${by.toFixed(1)}) rotate(${ang.toFixed(0)})">` +
+            `<g class="bulb k${k % 4}"${delayStyle}>` +
             `<rect x="-2.6" y="-6" width="5.2" height="4" rx="1" fill="#3a4a3a"/>` +
             `<ellipse cx="0" cy="3" rx="4" ry="6" fill="${c}" filter="url(#glow)"/>` +
-            `<ellipse cx="-1.3" cy="1" rx="1.1" ry="2" fill="#fff" opacity=".55"/></g>`;
+            `<ellipse cx="-1.3" cy="1" rx="1.1" ry="2" fill="#fff" opacity=".55"/></g></g>`;
           k++;
         }
       }
