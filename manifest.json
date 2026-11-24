@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Santa Pop-In",
   "description": "A tiny Santa who pops in with holiday surprises, a Christmas countdown sign, snow clouds, candy canes, lights, and snowy pines.",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "permissions": [
     "storage",
     "activeTab",
@@ -56,6 +56,6 @@
       ]
     }
   ],
-  "homepage_url": "https://jem6.com",
+  "homepage_url": "https://jem6.com/extensions/santa-pop-in",
   "author": "jem6"
 }

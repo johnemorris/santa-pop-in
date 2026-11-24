@@ -64,4 +64,4 @@ function santaDaysUntilChristmas(now = new Date()) {
 
 // Tip jar (jem6 Ko-fi). Set to "" to hide the candy-cane tip link.
 const SANTA_TIP_URL = "https://ko-fi.com/jem6com";
-const SANTA_BRAND_URL = "https://jem6.com";
+const SANTA_BRAND_URL = "https://jem6.com/extensions/santa-pop-in";
