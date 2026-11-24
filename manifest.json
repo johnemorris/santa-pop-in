@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Santa Pop-In",
   "description": "A tiny Santa who pops in with holiday surprises, a Christmas countdown sign, snow clouds, candy canes, lights, and snowy pines.",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "permissions": [
     "storage",
     "activeTab",
@@ -48,7 +48,8 @@
         "sounds/dance.ogg",
         "sounds/sign.ogg",
         "sounds/sleigh-bells.ogg",
-        "sounds/walk-bells.ogg"
+        "sounds/walk-bells.ogg",
+        "sounds/blower-hum.ogg"
       ],
       "matches": [
         "<all_urls>"

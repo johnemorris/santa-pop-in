@@ -62,7 +62,7 @@
 
   // ------------------------------------------------------------------ audio
   // Optional soft sounds (off by default): real sleigh-bell and ho-ho-ho
-  // recordings (CC0, see sounds/CREDITS.md). The leaf blower stays silent.
+  // recordings (CC0, see sounds/CREDITS.md). The leaf blower is a faint low hum.
   const Sound = (() => {
     const BASE_VOL = 0.35;
     const cache = {};
@@ -119,7 +119,7 @@
       walk: (signal) => loopFor("walk-bells", 0.45, signal),
       sign: () => play("sign", 0.7),
       cloud: (level) => play("cloud", 0.4 + Math.min(level, 6) * 0.08),
-      blower() {}, // silent on purpose
+      blower: (signal) => loopFor("blower-hum", 0.35, signal), // faint low vacuum hum
       stop: stopLoop,
     };
   })();
@@ -1114,7 +1114,7 @@
         [{ transform: `translateX(${from}px)${flip}` }, { transform: `translateX(${to}px)${flip}` }],
         { duration, easing: "linear", fill: "forwards" }
       );
-      Sound.blower();
+      const stopHum = Sound.blower(signal);
       makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1200);
 
       // The nozzle points ahead of him (image's right edge, 84% down when facing right),
@@ -1127,6 +1127,7 @@
       try {
         await played(trip, signal);
       } finally {
+        stopHum();
         Snow.setBlower(null);
         Snow.fadePile(); // tidy any crumbs he missed
         actor.remove();
