@@ -160,6 +160,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const oldFreq = settings.santaFreq;
   load(() => {
     armSnoozeWake();
+    if (!settings.santaSound) Sound.stop();
     const nowActive = isActiveHere();
     if (!nowActive) return stopAll();
     Decor.render();

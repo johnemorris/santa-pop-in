@@ -444,3 +444,44 @@ test("content scripts lifecycle: stopAll during blower, hover translucency, clou
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(cloudActor.isConnected, false, "Cloud should be removed after single-click dissipation");
 });
+
+test("content/core.js Sound.loopFor idempotent stop and crossScreen() helper", async () => {
+  let rafCalls = 0;
+  let pausedCount = 0;
+  class FakeAudio {
+    constructor(src) { this.src = src; this.volume = 1; this.loop = false; }
+    cloneNode() { return new FakeAudio(this.src); }
+    play() { return Promise.resolve(); }
+    pause() { pausedCount++; }
+  }
+  let now = 1000;
+  const ctx = {
+    Audio: FakeAudio,
+    window: { innerWidth: 1000, location: { hostname: "example.com" } },
+    performance: { now: () => now },
+    requestAnimationFrame: (fn) => { rafCalls++; now += 500; const t = setTimeout(() => fn(now), 0); t.unref?.(); return t; },
+    chrome: { runtime: { getURL: (p) => `chrome-extension://id/${p}` } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(read("settings.js"), ctx);
+  vm.runInContext(read("content/core.js"), ctx);
+  vm.runInContext(read("content/stage.js"), ctx);
+
+  vm.runInContext("settings.santaSound = true;", ctx);
+  const { Sound, crossScreen } = vm.runInContext("({ Sound, crossScreen })", ctx);
+  const ac = new AbortController();
+  const stop = Sound.walk(ac.signal);
+  ac.abort();
+  stop(); // second call must be a no-op (only 1 rAF fade chain)
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(rafCalls, 1);
+  assert.equal(pausedCount, 1);
+
+  let animArgs = null;
+  const fakeActor = {
+    animate(frames, opts) { animArgs = { frames, opts }; return { playState: "running" }; },
+  };
+  const { duration } = crossScreen(fakeActor, false, 120, { speed: 100, pad: 10, overrun: 30 });
+  assert.equal(duration, ((1010 - (-160)) / 100) * 1000);
+  assert.match(animArgs.frames[0].transform, /scaleX\(-1\)/);
+});

@@ -67,9 +67,12 @@ async function actWalk(signal) {
   // The sack is on Santa's back: left side when walking right.
   scheduleCanes(actor, () => (ltr ? 0.18 : 0.82), duration, signal, Math.floor(rand(1, 4)));
   const stopBells = Sound.walk(signal);
-  await played(trip, signal);
-  stopBells();
-  actor.remove();
+  try {
+    await played(trip, signal);
+  } finally {
+    stopBells();
+    actor.remove();
+  }
 }
 
 // Twinkling trail behind the sleigh.

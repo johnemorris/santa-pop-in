@@ -93,7 +93,10 @@ const Sound = (() => {
     a.loop = true;
     a.volume = Math.min(1, BASE_VOL * vol);
     a.play().catch(() => {});
+    let stopped = false;
     const me = { a, stop() {
+      if (stopped) return;
+      stopped = true;
       if (loop === me) loop = null;
       const v0 = a.volume, t0 = performance.now();
       const step = () => {
