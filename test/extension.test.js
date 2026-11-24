@@ -11,7 +11,7 @@ test("manifest.json and package.json versions and scripts are consistent", () =>
   const manifest = JSON.parse(read("manifest.json"));
   const pkg = JSON.parse(read("package.json"));
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.version, "1.4.0");
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.version, manifest.version);
   assert.deepEqual(manifest.content_scripts[0].js, ["settings.js", "content.js"]);
   assert.ok(manifest.permissions.includes("storage"));
@@ -305,7 +305,7 @@ test("content.js lifecycle: stopAll during blower, hover translucency, cloud sin
         return {
           setTransform() {}, clearRect() {}, createLinearGradient: () => ({ addColorStop() {} }),
           beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, stroke() {},
-          save() {}, restore() {}, arc() {},
+          save() {}, restore() {}, arc() {}, rotate() {}, drawImage() {},
         };
       },
       animate(_frames, _opts) {

@@ -61,93 +61,66 @@
   }
 
   // ------------------------------------------------------------------ audio
-  // Optional lightweight synthesized holiday chimes (off by default).
+  // Optional soft sounds (off by default): real sleigh-bell and ho-ho-ho
+  // recordings (CC0, see sounds/CREDITS.md). The leaf blower stays silent.
   const Sound = (() => {
-    let ctx = null;
+    const BASE_VOL = 0.35;
+    const cache = {};
+    let loop = null;
 
-    function getCtx() {
-      if (!settings.santaSound) return null;
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return null;
-        if (!ctx) ctx = new AC();
-        if (ctx.state === "suspended") ctx.resume().catch(() => {});
-        return ctx;
-      } catch {
-        return null;
+    function audio(name) {
+      if (!cache[name]) {
+        const a = new Audio(url(`sounds/${name}.ogg`));
+        a.preload = "auto";
+        cache[name] = a;
       }
+      return cache[name];
     }
 
-    function tone(freq, startOffset, dur, gainVal = 0.05, type = "sine") {
-      const c = getCtx();
-      if (!c) return;
+    function play(name, vol = 1) {
+      if (!settings.santaSound) return;
       try {
-        const t = c.currentTime + startOffset;
-        const osc = c.createOscillator();
-        const g = c.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, t);
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(gainVal, t + 0.015);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        osc.connect(g);
-        g.connect(c.destination);
-        osc.start(t);
-        osc.stop(t + dur + 0.02);
+        const a = audio(name).cloneNode();
+        a.volume = Math.min(1, BASE_VOL * vol);
+        a.play().catch(() => {}); // the page may not allow sound yet
       } catch {
         // ignore audio errors
       }
     }
 
+    // A quiet looping sound tied to an act; returns a stop function that fades it out.
+    function loopFor(name, vol, signal) {
+      stopLoop();
+      if (!settings.santaSound) return () => {};
+      const a = audio(name).cloneNode();
+      a.loop = true;
+      a.volume = Math.min(1, BASE_VOL * vol);
+      a.play().catch(() => {});
+      const me = { a, stop() {
+        if (loop === me) loop = null;
+        const v0 = a.volume, t0 = performance.now();
+        const step = () => {
+          const k = Math.min(1, (performance.now() - t0) / 400);
+          a.volume = v0 * (1 - k);
+          if (k < 1) requestAnimationFrame(step); else a.pause();
+        };
+        step();
+      } };
+      loop = me;
+      signal?.addEventListener("abort", () => me.stop(), { once: true });
+      return () => me.stop();
+    }
+    function stopLoop() { loop?.stop(); }
+
     return {
-      canePop() {
-        tone(880, 0, 0.12, 0.055, "triangle");
-        tone(1318.5, 0.045, 0.16, 0.05, "sine");
-        tone(1760, 0.09, 0.22, 0.04, "sine");
-      },
-      dance() {
-        tone(523.25, 0, 0.14, 0.045, "triangle");
-        tone(659.25, 0.11, 0.14, 0.045, "triangle");
-        tone(783.99, 0.22, 0.24, 0.05, "sine");
-      },
-      sleigh() {
-        [1567.98, 2093, 2637, 2093].forEach((f, i) => tone(f, i * 0.075, 0.2, 0.025, "sine"));
-      },
-      sign() {
-        tone(659.25, 0, 0.18, 0.04, "sine");
-        tone(987.77, 0.1, 0.28, 0.045, "triangle");
-      },
-      cloud(level) {
-        const base = 620 + Math.min(level, 6) * 85;
-        tone(base, 0, 0.15, 0.035, "sine");
-      },
-      blower() {
-        const c = getCtx();
-        if (!c) return;
-        try {
-          const len = Math.floor(c.sampleRate * 0.35);
-          const buf = c.createBuffer(1, len, c.sampleRate);
-          const data = buf.getChannelData(0);
-          for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * 0.4;
-          const src = c.createBufferSource();
-          src.buffer = buf;
-          const filter = c.createBiquadFilter();
-          filter.type = "bandpass";
-          filter.frequency.value = 520;
-          filter.Q.value = 0.8;
-          const g = c.createGain();
-          const t = c.currentTime;
-          g.gain.setValueAtTime(0.0001, t);
-          g.gain.linearRampToValueAtTime(0.03, t + 0.08);
-          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
-          src.connect(filter);
-          filter.connect(g);
-          g.connect(c.destination);
-          src.start(t);
-        } catch {
-          // ignore
-        }
-      },
+      canePop: () => play("cane-pop", 0.8),
+      dance: () => play("dance", 1),
+      sleigh: (signal) => loopFor("sleigh-bells", 0.7, signal),
+      walk: (signal) => loopFor("walk-bells", 0.45, signal),
+      sign: () => play("sign", 0.7),
+      cloud: (level) => play("cloud", 0.4 + Math.min(level, 6) * 0.08),
+      blower() {}, // silent on purpose
+      stop: stopLoop,
     };
   })();
 
@@ -768,7 +741,9 @@
     makeDanceable(actor, body, () => trip, signal);
     // The sack is on Santa's back: left side when walking right.
     scheduleCanes(actor, () => (ltr ? 0.18 : 0.82), duration, signal, Math.floor(rand(1, 4)));
+    const stopBells = Sound.walk(signal);
     await played(trip, signal);
+    stopBells();
     actor.remove();
   }
 
@@ -813,7 +788,7 @@
     const actor = el("div", { className: "actor", style: `bottom:${6 + Snow.heightAt(W / 2) * 0.5}px;` });
     const body = createRiggedSprite(url("images/sleigh.webp"), width, "rig-sleigh", "gallop", actor);
     const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
-    Sound.sleigh();
+    const stopBells = Sound.sleigh(signal);
     makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1100);
     scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, holiday ? 2 : Math.random() < 0.5 ? 1 : 0);
 
@@ -837,6 +812,7 @@
     try {
       await played(trip, signal);
     } finally {
+      stopBells();
       clearInterval(trail);
       clearInterval(powder);
       actor.remove();
@@ -1186,6 +1162,53 @@
   // --------------------------------------------------------------------- snow
   // Faint flakes fall only from under a passing cloud, land, and pile up along
   // the bottom, deeper toward the corners. The pile stays until it's clicked.
+  // Pre-drawn snowflake crystals: white arms with a soft blue-grey edge so
+  // they read on light and dark pages. Drawn once, then stamped per flake.
+  const FLAKE_KINDS = 3;
+  let flakeSpriteCache = null;
+  function flakeSprites() {
+    if (flakeSpriteCache) return flakeSpriteCache;
+    flakeSpriteCache = [];
+    const S = 64, c = S / 2, L = 27;
+    for (let kind = 0; kind < FLAKE_KINDS; kind++) {
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = S;
+      const g = cv.getContext("2d");
+      g.lineCap = "round";
+      const arms = () => {
+        g.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3, ux = Math.cos(a), uy = Math.sin(a);
+          g.moveTo(c, c);
+          g.lineTo(c + ux * L, c + uy * L);
+          const branches = kind === 0 ? [[0.52, 0.34]] : kind === 1 ? [[0.68, 0.3]] : [];
+          for (const [at, len] of branches) {
+            const bx = c + ux * L * at, by = c + uy * L * at;
+            for (const s of [-1, 1]) {
+              const ba = a + s * (Math.PI / 3.2);
+              g.moveTo(bx, by);
+              g.lineTo(bx + Math.cos(ba) * L * len, by + Math.sin(ba) * L * len);
+            }
+          }
+        }
+      };
+      g.strokeStyle = "rgba(74,106,156,.92)";
+      g.lineWidth = 10;
+      arms(); g.stroke();
+      g.strokeStyle = "#f2f8ff";
+      g.lineWidth = 5.5;
+      arms(); g.stroke();
+      if (kind === 2) { // small hexagon hub
+        g.beginPath();
+        for (let i = 0; i < 6; i++) g.lineTo(c + Math.cos((i * Math.PI) / 3) * 9, c + Math.sin((i * Math.PI) / 3) * 9);
+        g.closePath(); g.fillStyle = "#f2f8ff"; g.fill();
+        g.strokeStyle = "rgba(74,106,156,.92)"; g.lineWidth = 2.5; g.stroke();
+      }
+      flakeSpriteCache.push(cv);
+    }
+    return flakeSpriteCache;
+  }
+
   const Snow = (() => {
     const COL = 4; // px per height column
     const HIT = 40; // px per clickable pile segment
@@ -1324,17 +1347,15 @@
         ctx.restore();
       }
       // Falling flakes
+      const sprites = flakeSprites();
       for (const f of flakes) {
-        ctx.globalAlpha = f.a;
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = f.a * 0.75;
-        ctx.strokeStyle = "#7b93b6";
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
+        const size = f.r * 4.6; // six-armed crystal; arms need a little more room than a dot
+        ctx.globalAlpha = Math.max(0, f.a);
+        ctx.setTransform(dpr, 0, 0, dpr, f.x * dpr, f.y * dpr);
+        ctx.rotate(f.rot);
+        ctx.drawImage(sprites[f.kind], -size / 2, -size / 2, size, size);
       }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Snow kicked up by the blower, and the wind streaks.
       for (const p of puffs) {
         const k = Math.max(0, 1 - p.age / p.life);
@@ -1370,8 +1391,9 @@
         while (n > 0) {
           if (Math.random() < n && flakes.length < 700) {
             flakes.push({
-              x: rand(s.x0, s.x1), y: s.y, r: rand(1.3, 3), a: rand(0.75, 0.95),
+              x: rand(s.x0, s.x1), y: s.y, r: rand(1.3, 3), a: rand(0.8, 1),
               vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(8, 20),
+              rot: Math.random() * Math.PI, spin: rand(-1.2, 1.2), kind: Math.floor(Math.random() * FLAKE_KINDS),
             });
           }
           n -= 1;
@@ -1386,6 +1408,7 @@
           if (f.a <= 0) { flakes.splice(i, 1); continue; }
         }
         f.phase += dt * 1.5;
+        f.rot += f.spin * dt;
         f.y += f.vy * dt;
         f.x += Math.sin(f.phase) * f.sway * dt;
         if (f.y >= H - heightAt(f.x) - f.r) {
