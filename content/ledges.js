@@ -252,23 +252,6 @@ const Ledges = (() => {
   }
 
   // One elf: sparkle, pop up from behind the card's top edge, sweep a stretch, sparkle away.
-  // Popup "Try": dust the visible cards with snow, then send the elves out. (Testing aid.)
-  function tryElves() {
-    scan();
-    list.forEach(measure);
-    let n = 0;
-    for (const l of list) {
-      if (!l.rect || l.sweeping) continue;
-      const top = 22 + Math.random() * 12;
-      for (let i = 0; i < l.h.length; i++) l.h[i] = Math.max(l.h[i], Math.min(capAt(l, i), top));
-      n++;
-    }
-    if (!n) return false;
-    Snow.redraw();
-    setTimeout(sweepAll, 700);
-    return true;
-  }
-
   async function elfSweep(l, x0, x1, dir, girl, delay, g) {
     await sleep(delay);
     if (g !== gen || !l.rect) return;
@@ -370,5 +353,5 @@ const Ledges = (() => {
     list = [];
   }
 
-  return { frame, catchFlake, draw, any, busy, sweepAll, tryElves, clear };
+  return { frame, catchFlake, draw, any, busy, sweepAll, clear };
 })();
