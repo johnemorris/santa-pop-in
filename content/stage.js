@@ -180,6 +180,10 @@ const CSS = `
   .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
   svg.garland { position: fixed; inset: 0; pointer-events: none; transition: opacity .35s, filter .35s;
                 filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+  svg.snowbase { position: fixed; left: 0; bottom: 0; width: 100%; height: 16px; pointer-events: none;
+                 filter: drop-shadow(0 -1px 2px rgba(90,120,160,.18)); }
+  .glint { animation: gtw 3.2s ease-in-out infinite; }
+  .glint.k1 { animation-delay: -.8s; } .glint.k2 { animation-delay: -1.6s; } .glint.k3 { animation-delay: -2.4s; }
   svg.garland.back { opacity: .16; filter: blur(1.5px); }
   .gbulb { animation: gtw 2.4s ease-in-out infinite; }
   .gbulb.k1 { animation-delay: -.6s; } .gbulb.k2 { animation-delay: -1.2s; } .gbulb.k3 { animation-delay: -1.8s; }

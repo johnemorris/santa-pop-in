@@ -28,6 +28,7 @@ const SANTA_DEFAULTS = {
     lightMode: "twinkle", // twinkle | chase | steady
     trees: false,
     garland: false,
+    snowBase: false,
     ornaments: true,
   },
 };

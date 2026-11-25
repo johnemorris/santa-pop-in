@@ -1,4 +1,4 @@
-// Santa Pop-In content script: Window-edge lights, garland with corner wreaths, and snowy pines in the bottom corners.
+// Santa Pop-In content script: Window-edge lights, garland with corner wreaths, a packed-snow base, and snowy pines in the bottom corners.
 // Content scripts share one isolated world, so top-level names here are
 // visible to the other content/*.js files (see manifest.json for load order).
 
@@ -30,7 +30,10 @@ const Decor = (() => {
     svg.setAttribute("height", H);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const m = 1.5, gap = 44, sag = 4;
-    const sides = [[m, m, W - m, m], [W - m, m, W - m, H - m], [W - m, H - m, m, H - m], [m, H - m, m, m]];
+    // With the packed-snow base on, the bottom edge is the ground, so no lights there.
+    const sides = settings.santaDecor.snowBase
+      ? [[m, H - m, m, m], [m, m, W - m, m], [W - m, m, W - m, H - m]]
+      : [[m, m, W - m, m], [W - m, m, W - m, H - m], [W - m, H - m, m, H - m], [m, H - m, m, m]];
     let d = "", bulbs = "", k = 0;
     for (const [x0, y0, x1, y1] of sides) {
       const len = Math.hypot(x1 - x0, y1 - y0);
@@ -161,6 +164,29 @@ const Decor = (() => {
     return svg;
   }
 
+  // A thin strip of packed snow along the bottom: the ground the scene stands on.
+  // Fresh snow piles on top of it and the blower clears only the fresh snow.
+  function snowBase(W) {
+    const r = seeded(77), Hs = 16;
+    let d = `M0,${Hs}`;
+    for (let x = 0; x <= W; x += 24) d += ` L${x},${(Hs - 7 - Math.sin(x / 90) * 1.6 - r() * 2.2).toFixed(1)}`;
+    d += ` L${W},${Hs} Z`;
+    let glints = "";
+    for (let i = 0; i < Math.round(W / 70); i++)
+      glints += `<circle class="glint k${i % 4}" cx="${(r() * W).toFixed(0)}" cy="${(Hs - 2 - r() * 4).toFixed(1)}" r="${(0.6 + r() * 0.7).toFixed(1)}" fill="#fff"/>`;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "snowbase");
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", Hs);
+    svg.setAttribute("viewBox", `0 0 ${W} ${Hs}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.innerHTML =
+      `<defs><linearGradient id="sbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/>` +
+      `<stop offset=".55" stop-color="#eef4fb"/><stop offset="1" stop-color="#cfdcec"/></linearGradient></defs>` +
+      `<path d="${d}" fill="url(#sbg)" stroke="#dbe6f3" stroke-width=".8"/>${glints}`;
+    return svg;
+  }
+
   function treeOrnamentsSVG(side) {
     const palette = PALETTES[settings.santaDecor.lightStyle] || PALETTES.classic;
     // Place baubles on the visible inward half of each corner pine.
@@ -199,12 +225,13 @@ const Decor = (() => {
     const want =
       isActiveHere() &&
       !document.fullscreenElement &&
-      (settings.santaDecor.lights || settings.santaDecor.trees || settings.santaDecor.garland);
+      (settings.santaDecor.lights || settings.santaDecor.trees || settings.santaDecor.garland || settings.santaDecor.snowBase);
     clear();
     if (!want) return;
     ensureStage();
     box = el("div", { className: "decor" });
     layer.prepend(box);
+    if (settings.santaDecor.snowBase) box.append(snowBase(window.innerWidth));
     if (settings.santaDecor.garland) box.append((wreathing = garland(window.innerWidth, window.innerHeight)));
     if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
     if (settings.santaDecor.trees) {
