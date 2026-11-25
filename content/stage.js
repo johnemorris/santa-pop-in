@@ -178,6 +178,12 @@ const CSS = `
   }
   .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
   .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  svg.garland { position: fixed; inset: 0; pointer-events: none; transition: opacity .35s, filter .35s;
+                filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+  svg.garland.back { opacity: .16; filter: blur(1.5px); }
+  .gbulb { animation: gtw 2.4s ease-in-out infinite; }
+  .gbulb.k1 { animation-delay: -.6s; } .gbulb.k2 { animation-delay: -1.2s; } .gbulb.k3 { animation-delay: -1.8s; }
+  @keyframes gtw { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
   .tree-wrap { position: fixed; bottom: -6px; height: min(230px, 30vh); opacity: .97;
                filter: drop-shadow(0 2px 4px rgba(30,50,70,.18));
                transition: opacity .3s ease, filter .3s ease, transform .3s ease; }

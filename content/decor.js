@@ -1,4 +1,4 @@
-// Santa Pop-In content script: Window-edge lights and snowy pines in the bottom corners.
+// Santa Pop-In content script: Window-edge lights, garland with corner wreaths, and snowy pines in the bottom corners.
 // Content scripts share one isolated world, so top-level names here are
 // visible to the other content/*.js files (see manifest.json for load order).
 
@@ -6,7 +6,7 @@
 // Lights around the edge of the window and half a snowy pine in each bottom
 // corner. Purely decorative: never catches a click, hidden in fullscreen.
 const Decor = (() => {
-  let box = null, resizeT = null, trees = [], hoverRaf = 0, mx = -1, my = -1;
+  let box = null, resizeT = null, trees = [], wreathing = null, hoverRaf = 0, mx = -1, my = -1;
   const PALETTES = {
     classic: ["#ff3b3b", "#2ecc40", "#ffd23f", "#3b8bff"],
     warm: ["#ffe8a3", "#ffd166", "#ffb703", "#fff4cc"],
@@ -63,6 +63,104 @@ const Decor = (() => {
     return svg;
   }
 
+  // Seeded random so the garland looks the same on every page.
+  function seeded(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Pine garland draped loosely across the top, hanging halfway down each side,
+  // with a bowed wreath in each upper corner.
+  function garland(W, H) {
+    const r = seeded(1225);
+    const palette = PALETTES[settings.santaDecor.lightStyle] || PALETTES.classic;
+    const greens = ["#185232", "#1f6a3e", "#2a7d4a", "#3a8f55", "#123d24"];
+    const R = Math.min(38, Math.max(26, W * 0.027)); // wreath radius
+    const cx0 = R + 14, cx1 = W - R - 14, cy = R + 12;
+    const pts = [];
+    // Loose swags across the top, wreath to wreath.
+    const sx0 = cx0 + R * 0.9, sx1 = cx1 - R * 0.9;
+    const n = Math.max(2, Math.round((sx1 - sx0) / 430));
+    const sag = Math.min(34, H * 0.045);
+    for (let k = 0; k < n; k++) {
+      const a = sx0 + ((sx1 - sx0) * k) / n, b = sx0 + ((sx1 - sx0) * (k + 1)) / n;
+      const steps = Math.max(4, Math.round((b - a) / 7));
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        pts.push({ x: a + (b - a) * t, y: cy - 4 + 4 * sag * t * (1 - t) });
+      }
+    }
+    // Hanging down each side to about halfway, with a little sway.
+    const drops = [];
+    for (const x of [cx0 - R * 0.35, cx1 + R * 0.35]) {
+      const y0 = cy + R + 26, y1 = H * 0.5;
+      const steps = Math.round((y1 - y0) / 7);
+      for (let i = 0; i <= steps; i++) {
+        const y = y0 + ((y1 - y0) * i) / steps;
+        pts.push({ x: x + Math.sin(i * 0.22) * 2.5, y });
+      }
+      drops.push({ x, y: y1 });
+    }
+    let needles = "", berries = "", bulbs = "", k = 0;
+    const tuft = (x, y, count, spread, lenA, lenB) => {
+      for (let j = 0; j < count; j++) {
+        const ang = r() * Math.PI * 2, len = lenA + r() * lenB;
+        const ox = (r() - 0.5) * spread, oy = (r() - 0.5) * spread;
+        needles += `<line x1="${(x + ox).toFixed(1)}" y1="${(y + oy).toFixed(1)}" x2="${(x + ox + Math.cos(ang) * len).toFixed(1)}" y2="${(y + oy + Math.sin(ang) * len).toFixed(1)}" stroke="${greens[Math.floor(r() * greens.length)]}" stroke-width="${(1.4 + r() * 1.2).toFixed(1)}"/>`;
+      }
+    };
+    pts.forEach((p, i) => {
+      tuft(p.x, p.y, 7, 8, 6, 9);
+      if (i % 13 === 5) for (let j = 0; j < 3; j++)
+        berries += `<circle cx="${(p.x + (r() - 0.5) * 10).toFixed(1)}" cy="${(p.y + (r() - 0.5) * 10).toFixed(1)}" r="${(2 + r()).toFixed(1)}" fill="#c8102e" stroke="#7a0a1c" stroke-width=".7"/>`;
+      if (i % 9 === 0) {
+        const c = palette[k++ % palette.length];
+        bulbs += `<circle class="gbulb k${k % 4}" cx="${(p.x + (r() - 0.5) * 6).toFixed(1)}" cy="${(p.y + 3 + r() * 3).toFixed(1)}" r="3" fill="${c}" filter="url(#gglow)"/>`;
+      }
+    });
+    // A pine cone and berries at the bottom of each side drop.
+    for (const d of drops) {
+      tuft(d.x, d.y + 4, 14, 10, 5, 8);
+      berries += `<ellipse cx="${d.x}" cy="${d.y + 14}" rx="4.5" ry="7" fill="#6b4226" stroke="#3f2614" stroke-width="1"/>`;
+      for (let j = 0; j < 3; j++) berries += `<circle cx="${d.x - 5 + j * 5}" cy="${d.y + 4 + (j % 2) * 3}" r="2.6" fill="#d4142f" stroke="#7a0a1c" stroke-width=".7"/>`;
+    }
+    const wreath = (cx) => {
+      for (let i = 0; i < 64; i++) {
+        const t = (i / 64) * Math.PI * 2;
+        tuft(cx + Math.cos(t) * (R - 4), cy + Math.sin(t) * (R - 4), 3, 3, 6, 7);
+        tuft(cx + Math.cos(t) * (R + 3), cy + Math.sin(t) * (R + 3), 3, 3, 6, 8);
+      }
+      for (let i = 0; i < 10; i++) {
+        const t = r() * Math.PI * 2, rad = R + (r() - 0.5) * 9;
+        berries += `<circle cx="${(cx + Math.cos(t) * rad).toFixed(1)}" cy="${(cy + Math.sin(t) * rad).toFixed(1)}" r="${(2.2 + r()).toFixed(1)}" fill="#d4142f" stroke="#7a0a1c" stroke-width=".7"/>`;
+      }
+      const s = R / 34;
+      berries += `<g transform="translate(${cx} ${cy + R - 2}) scale(${s.toFixed(2)})">` +
+        `<path d="M0 0 C-10 -14 -30 -12 -26 0 C-30 12 -10 14 0 0 Z" fill="#c8102e" stroke="#7a0a1c" stroke-width="1.2"/>` +
+        `<path d="M0 0 C10 -14 30 -12 26 0 C30 12 10 14 0 0 Z" fill="#c8102e" stroke="#7a0a1c" stroke-width="1.2"/>` +
+        `<path d="M-3 2 L-12 26 L-6 22 L-3 28 Z M3 2 L12 26 L6 22 L3 28 Z" fill="#b00d27" stroke="#7a0a1c" stroke-width="1"/>` +
+        `<circle r="5" fill="#e01b3a" stroke="#7a0a1c" stroke-width="1.2"/></g>`;
+    };
+    wreath(cx0);
+    wreath(cx1);
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "garland");
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", H);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML =
+      `<defs><filter id="gglow" x="-150%" y="-150%" width="400%" height="400%">` +
+      `<feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` +
+      `<g stroke-linecap="round">${needles}</g>${berries}${bulbs}`;
+    return svg;
+  }
+
   function treeOrnamentsSVG(side) {
     const palette = PALETTES[settings.santaDecor.lightStyle] || PALETTES.classic;
     // Place baubles on the visible inward half of each corner pine.
@@ -101,12 +199,13 @@ const Decor = (() => {
     const want =
       isActiveHere() &&
       !document.fullscreenElement &&
-      (settings.santaDecor.lights || settings.santaDecor.trees);
+      (settings.santaDecor.lights || settings.santaDecor.trees || settings.santaDecor.garland);
     clear();
     if (!want) return;
     ensureStage();
     box = el("div", { className: "decor" });
     layer.prepend(box);
+    if (settings.santaDecor.garland) box.append((wreathing = garland(window.innerWidth, window.innerHeight)));
     if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
     if (settings.santaDecor.trees) {
       trees = [createTree("l"), createTree("r")];
@@ -121,6 +220,7 @@ const Decor = (() => {
     box?.remove();
     box = null;
     trees = [];
+    wreathing = null;
     mx = my = -1;
   }
 
@@ -137,9 +237,15 @@ const Decor = (() => {
   function checkHover() {
     hoverRaf = 0;
     for (const t of trees) t.classList.toggle("back", mx >= 0 && overTree(t));
+    if (wreathing) {
+      // Fade the garland while the pointer is near it, so menus underneath stay easy to see.
+      const W = window.innerWidth, H = window.innerHeight;
+      const near = mx >= 0 && (my < 80 || (my < H * 0.5 + 30 && (mx < 56 || mx > W - 56)));
+      wreathing.classList.toggle("back", near);
+    }
     Snow.setHover(mx, my);
   }
-  function queueHover() { if ((trees.length || Snow.hasPile()) && !hoverRaf) hoverRaf = requestAnimationFrame(checkHover); }
+  function queueHover() { if ((trees.length || wreathing || Snow.hasPile()) && !hoverRaf) hoverRaf = requestAnimationFrame(checkHover); }
   document.addEventListener("mousemove", (e) => { mx = e.clientX; my = e.clientY; queueHover(); }, { passive: true, capture: true });
   document.addEventListener("mouseleave", () => { mx = my = -1; queueHover(); });
   window.addEventListener("blur", () => { mx = my = -1; queueHover(); });
