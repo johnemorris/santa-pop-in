@@ -48,6 +48,7 @@ footer { margin-top: 10px; padding-top: 9px; border-top: 1px solid #f3f4f6;
 footer a { text-decoration: none; }
 .tip { display: inline-block; padding: 5px 12px; border-radius: 14px; background: #fff7ed;
        border: 1px solid #fed7aa; color: #9a3412; font-size: 12px; font-weight: 600; white-space: normal; max-width: 100%; box-sizing: border-box; text-align: center; line-height: 1.35; }
+.tip-note { display: block; margin-top: 2px; font-size: 11px; font-weight: 500; color: #8a7b6c; }
 .tip:hover { background: #ffedd5; }
 .brand { display: inline-flex; align-items: center; gap: 6px; color: #64748b; font-size: 11px; }
 .brand b { color: #0f172a; letter-spacing: .02em; }
