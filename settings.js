@@ -18,6 +18,8 @@ const SANTA_DEFAULTS = {
     dance: true,
     quotes: true,
     blower: true,
+    cardSnow: true,
+    elves: true,
   },
   santaDecor: {
     lights: false,

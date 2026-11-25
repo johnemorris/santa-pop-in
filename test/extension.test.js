@@ -6,7 +6,7 @@ const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
-const CONTENT_FILES = ["core", "stage", "effects", "acts", "snow", "decor", "main"].map((f) => `content/${f}.js`);
+const CONTENT_FILES = ["core", "stage", "effects", "acts", "snow", "ledges", "decor", "main"].map((f) => `content/${f}.js`);
 
 test("manifest.json and package.json versions and scripts are consistent", () => {
   const manifest = JSON.parse(read("manifest.json"));

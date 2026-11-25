@@ -142,8 +142,8 @@ const Sound = (() => {
   return {
     canePop: () => play("cane-pop", 0.8),
     dance: () => play("dance", 1),
-    sleigh: (signal) => loopFor("sleigh-bells", 0.7, signal),
-    walk: (signal) => loopFor("walk-bells", 0.45, signal),
+    sleigh: (signal) => loopFor("sleigh-bells", 0.35, signal),
+    walk: (signal) => loopFor("walk-bells", 0.225, signal),
     sign: () => play("sign", 0.7),
     cloud: (level) => play("cloud", 0.4 + Math.min(level, 6) * 0.08),
     blower: (signal) => loopFor("blower", 0.075, signal), // real petrol leaf blower, 10% of 1.4.4 level

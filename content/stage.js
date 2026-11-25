@@ -167,6 +167,15 @@ const CSS = `
   canvas.snow { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 1;
                 transition: opacity .3s ease, filter .3s ease; }
   canvas.snow.back { opacity: .16; filter: blur(1.5px); }
+  .ledgehit { position: fixed; pointer-events: auto; cursor: pointer; z-index: 1; }
+  .elfbox { position: fixed; overflow: hidden; pointer-events: none; z-index: 3; }
+  .elfbox .elf { position: absolute; left: 0; bottom: 0; will-change: transform; }
+  .elfbox .elf img { width: 100%; height: auto; animation: sweepBob .32s ease-in-out infinite;
+                     transform-origin: 40% 100%; }
+  @keyframes sweepBob {
+    0%, 100% { transform: rotate(-4deg) translateY(0); }
+    50%      { transform: rotate(5deg) translateY(-2px); }
+  }
   .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
   .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
   .tree-wrap { position: fixed; bottom: -6px; height: min(230px, 30vh); opacity: .97;

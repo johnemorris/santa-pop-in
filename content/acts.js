@@ -87,6 +87,24 @@ function sparkle(x, y, golden = false) {
   ).onfinish = () => s.remove();
 }
 
+// Santa doesn't always ride the same way: the classic, a lounge with a wave,
+// a handstand, a role swap, or an elf riding along. Never the same twice running.
+const SLEIGH_POSES = [
+  { img: "images/sleigh.webp", rig: true },
+  { img: "images/sleigh-lounge.webp" },
+  { img: "images/sleigh-handstand.webp" },
+  { img: "images/sleigh-swap.webp" },
+  { img: "images/sleigh-elf.webp" },
+];
+let lastPose = -1;
+function pickSleighPose() {
+  let i;
+  do i = Math.floor(Math.random() * SLEIGH_POSES.length);
+  while (i === lastPose && SLEIGH_POSES.length > 1);
+  lastPose = i;
+  return SLEIGH_POSES[i];
+}
+
 async function actSleigh(signal) {
   const W = window.innerWidth;
   const H = window.innerHeight;
@@ -114,7 +132,11 @@ async function actSleigh(signal) {
   }
 
   const actor = el("div", { className: "actor", style: `bottom:${6 + Snow.heightAt(W / 2) * 0.5}px;` });
-  const body = createRiggedSprite(url("images/sleigh.webp"), width, "rig-sleigh", "gallop", actor);
+  const pose = pickSleighPose();
+  const body = pose.rig
+    ? createRiggedSprite(url(pose.img), width, "rig-sleigh", "gallop", actor)
+    : el("div", { className: "rig gallop", style: `width:${width}px;` }, actor);
+  if (!pose.rig) el("img", { src: url(pose.img), alt: "", style: "width:100%;height:auto;" }, body);
   const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
   const stopBells = Sound.sleigh(signal);
   makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1100);
@@ -408,6 +430,11 @@ async function actCloud(signal) {
     clearTimeout(burst);
     emitter.stop();
     actor.remove();
+  }
+
+  // The elves pop out and sweep the cards clean once the snow has settled.
+  if (!signal.aborted && Ledges.any()) {
+    sleep(1600, signal).then(() => { if (!signal.aborted) Ledges.sweepAll(); });
   }
 
   // Santa always comes next to clear whatever fell.

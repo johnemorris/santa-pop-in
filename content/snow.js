@@ -189,6 +189,7 @@ const Snow = (() => {
       ctx.stroke();
       ctx.restore();
     }
+    Ledges.draw(ctx);
     // Falling flakes
     const sprites = flakeSprites();
     for (const f of flakes) {
@@ -235,13 +236,19 @@ const Snow = (() => {
         if (Math.random() < n && flakes.length < 700) {
           flakes.push({
             x: rand(s.x0, s.x1), y: s.y, r: rand(1.3, 3), a: rand(0.8, 1),
-            vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(8, 20),
+            vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(14, 30),
+            drift: rand(-14, 14), flutter: rand(1.1, 1.9),
             rot: Math.random() * Math.PI, spin: rand(-1.2, 1.2), kind: Math.floor(Math.random() * FLAKE_KINDS),
           });
         }
         n -= 1;
       }
     }
+
+    // A gentle breeze that wanders back and forth, so flakes fan out as they fall.
+    const t = now / 1000;
+    const breeze = 13 * Math.sin(t * 0.37) + 8 * Math.sin(t * 0.13 + 1.3);
+    Ledges.frame(emitters.length > 0);
 
     for (let i = flakes.length - 1; i >= 0; i--) {
       const f = flakes[i];
@@ -250,10 +257,12 @@ const Snow = (() => {
         f.r *= 1 - dt * 0.8;
         if (f.a <= 0) { flakes.splice(i, 1); continue; }
       }
-      f.phase += dt * 1.5;
+      f.phase += dt * (f.flutter || 1.5);
       f.rot += f.spin * dt;
+      const py = f.y;
       f.y += f.vy * dt;
-      f.x += Math.sin(f.phase) * f.sway * dt;
+      f.x += (Math.sin(f.phase) * f.sway + (f.drift || 0) + breeze) * dt;
+      if (!f.evap && Ledges.catchFlake(f, py)) { flakes.splice(i, 1); continue; }
       if (f.y >= H - heightAt(f.x) - f.r) {
         if (!f.evap && f.x >= 0 && f.x <= W) deposit(f.x, f.r * 1.1 * weight(f.x));
         flakes.splice(i, 1);
@@ -300,7 +309,7 @@ const Snow = (() => {
 
     settle();
     draw();
-    if (emitters.length || flakes.length || puffs.length || blower) {
+    if (emitters.length || flakes.length || puffs.length || blower || Ledges.busy()) {
       raf = requestAnimationFrame(tick);
     } else {
       raf = null;
@@ -373,6 +382,11 @@ const Snow = (() => {
     hits = [];
     canvas?.remove();
     canvas = ctx = null;
+    Ledges.clear();
+  }
+
+  function redraw() {
+    if (ctx) draw();
   }
 
   window.addEventListener("resize", resize);
@@ -398,5 +412,5 @@ const Snow = (() => {
     canvas.classList.toggle("back", over);
   }
 
-  return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick, evaporate, setHover };
+  return { emit, setBlower, fadePile, seed, clear, heightAt, hasPile, kick, evaporate, setHover, redraw, wake };
 })();
