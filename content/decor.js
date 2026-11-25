@@ -31,9 +31,14 @@ const Decor = (() => {
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const m = 1.5, gap = 44, sag = 4;
     // With the packed-snow base on, the bottom edge is the ground, so no lights there.
-    const sides = settings.santaDecor.snowBase
-      ? [[m, H - m, m, m], [m, m, W - m, m], [W - m, m, W - m, H - m]]
-      : [[m, m, W - m, m], [W - m, m, W - m, H - m], [W - m, H - m, m, H - m], [m, H - m, m, m]];
+    // With the garland on, the top string is woven into the garland instead.
+    const D = settings.santaDecor;
+    const sides = [
+      D.garland ? null : [m, m, W - m, m],
+      [W - m, m, W - m, H - m],
+      D.snowBase ? null : [W - m, H - m, m, H - m],
+      [m, H - m, m, m],
+    ].filter(Boolean);
     let d = "", bulbs = "", k = 0;
     for (const [x0, y0, x1, y1] of sides) {
       const len = Math.hypot(x1 - x0, y1 - y0);
@@ -83,6 +88,8 @@ const Decor = (() => {
   function garland(W, H) {
     const r = seeded(1225);
     const palette = PALETTES[settings.santaDecor.lightStyle] || PALETTES.classic;
+    const withLights = !!settings.santaDecor.lights;
+    const mode = resolveLightMode();
     const greens = ["#185232", "#1f6a3e", "#2a7d4a", "#3a8f55", "#123d24"];
     const R = Math.min(38, Math.max(26, W * 0.027)); // wreath radius
     const cx0 = R + 14, cx1 = W - R - 14, cy = R + 12;
@@ -122,7 +129,17 @@ const Decor = (() => {
       tuft(p.x, p.y, 7, 8, 6, 9);
       if (i % 13 === 5) for (let j = 0; j < 3; j++)
         berries += `<circle cx="${(p.x + (r() - 0.5) * 10).toFixed(1)}" cy="${(p.y + (r() - 0.5) * 10).toFixed(1)}" r="${(2 + r()).toFixed(1)}" fill="#c8102e" stroke="#7a0a1c" stroke-width=".7"/>`;
-      if (i % 9 === 0) {
+      if (withLights && i % 6 === 2) {
+        // The window lights, woven into the garland: same bulbs, colors and mode.
+        const c = palette[k % palette.length];
+        const delayStyle = mode === "chase" ? ` style="animation-delay:${((k % 12) * -0.15).toFixed(2)}s"` : "";
+        bulbs += `<g transform="translate(${(p.x + (r() - 0.5) * 5).toFixed(1)},${(p.y + 4).toFixed(1)}) rotate(${((r() - 0.5) * 30).toFixed(0)})">` +
+          `<g class="bulb k${k % 4}"${delayStyle}>` +
+          `<rect x="-2.6" y="-6" width="5.2" height="4" rx="1" fill="#3a4a3a"/>` +
+          `<ellipse cx="0" cy="3" rx="4" ry="6" fill="${c}" filter="url(#gglow)"/>` +
+          `<ellipse cx="-1.3" cy="1" rx="1.1" ry="2" fill="#fff" opacity=".55"/></g></g>`;
+        k++;
+      } else if (!withLights && i % 9 === 0) {
         const c = palette[k++ % palette.length];
         bulbs += `<circle class="gbulb k${k % 4}" cx="${(p.x + (r() - 0.5) * 6).toFixed(1)}" cy="${(p.y + 3 + r() * 3).toFixed(1)}" r="3" fill="${c}" filter="url(#gglow)"/>`;
       }
@@ -153,7 +170,7 @@ const Decor = (() => {
     wreath(cx0);
     wreath(cx1);
     const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("class", "garland");
+    svg.setAttribute("class", withLights ? (mode === "chase" ? "garland chase" : mode === "twinkle" ? "garland blink" : "garland") : "garland");
     svg.setAttribute("width", W);
     svg.setAttribute("height", H);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
