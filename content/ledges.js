@@ -9,7 +9,9 @@
 const Ledges = (() => {
   const COL = 3; // px per height column
   const MAX = 14; // cards watched at once
-  const CAP = 12; // deepest a cap gets, px
+  const CAP = 90; // safety ceiling only; the real limit is the slope snow can hold
+  const SLOPE = 1.9; // px of rise per column (~32 degrees, snow's angle of repose)
+  const LIP = 1.5; // snow right at a card edge slides off
   const ELF_RATIO = 227 / 200; // elf sprite width / height
   let list = []; // { el, h, rect, hit, sweeping }
   let lastScan = 0;
@@ -84,10 +86,29 @@ const Ledges = (() => {
     list.forEach(measure);
   }
 
+  // Natural pile: no flat lid. Snow heaps up until a side gets steeper than it can
+  // hold, then slides to the neighbours (and off the card's edges).
   function capAt(l, i) {
     const n = l.h.length;
-    const fromEnd = Math.min(i, n - 1 - i) * COL;
-    return CAP * Math.min(1, 0.25 + fromEnd / 22);
+    const fromEnd = Math.min(i, n - 1 - i);
+    return Math.min(CAP, LIP + fromEnd * SLOPE);
+  }
+  function settle(l, i) {
+    const h = l.h, n = h.length;
+    const a = Math.max(0, i - 40), b = Math.min(n - 1, i + 40);
+    for (let pass = 0; pass < 6; pass++) {
+      let moved = false;
+      for (let j = a; j < b; j++) {
+        const d = h[j] - h[j + 1];
+        if (Math.abs(d) > SLOPE) {
+          const m = (Math.abs(d) - SLOPE) / 2;
+          if (d > 0) { h[j] -= m; h[j + 1] += m; } else { h[j] += m; h[j + 1] -= m; }
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    for (let j = a; j <= b; j++) h[j] = Math.min(h[j], capAt(l, j));
   }
 
   function catchFlake(f, prevY) {
@@ -102,8 +123,9 @@ const Ledges = (() => {
         for (let k = -2; k <= 2; k++) {
           const j = i + k;
           if (j < 0 || j >= l.h.length) continue;
-          l.h[j] = Math.min(capAt(l, j), l.h[j] + f.r * 0.55 * spread[k + 2]);
+          l.h[j] = l.h[j] + f.r * 0.55 * spread[k + 2];
         }
+        settle(l, i);
         return true;
       }
     }
@@ -158,7 +180,7 @@ const Ledges = (() => {
         sweep(l);
       });
     }
-    const hgt = Math.max(6, Math.min(16, peak + 3));
+    const hgt = Math.max(6, peak + 3);
     Object.assign(l.hit.style, {
       display: l.sweeping ? "none" : "block",
       left: r.left + "px",
