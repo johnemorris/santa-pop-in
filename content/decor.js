@@ -252,6 +252,12 @@ const Decor = (() => {
     if (settings.santaDecor.garland) box.append((wreathing = garland(window.innerWidth, window.innerHeight)));
     if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
     if (settings.santaDecor.trees) {
+      // A faint smaller pine behind each corner tree on a soft snow drift, for depth.
+      for (const side of ["l", "r"]) {
+        el("div", { className: `drift ${side}` }, box);
+        const back = el("div", { className: `tree-far ${side}` }, box);
+        el("img", { className: "tree-img", src: url("images/pine.webp"), alt: "" }, back);
+      }
       trees = [createTree("l"), createTree("r")];
     }
   }
