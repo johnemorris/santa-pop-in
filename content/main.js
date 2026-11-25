@@ -214,6 +214,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.act === "blower") {
     if (!Snow.hasPile()) Snow.seed();
     onPileClick(null);
+  } else if (msg.act === "elves") {
+    ensureStage();
+    return reply({ ok: Ledges.tryElves(), noCards: true });
   } else if (msg.act === "cane") {
     ensureStage();
     dropCane(rand(window.innerWidth * 0.25, window.innerWidth * 0.75), rand(60, 140));

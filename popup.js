@@ -263,6 +263,8 @@ document.querySelectorAll("[data-try]").forEach((btn) =>
         msg.textContent = "Santa can't visit this page. Try a regular website (reload it if it was open before the update).";
       } else if (resp && resp.paused) {
         msg.textContent = "Santa is paused or snoozing right now. Resume first to try!";
+      } else if (resp && resp.noCards && !resp.ok) {
+        msg.textContent = "No cards on this page for the elves to sweep. Try a page with boxes or cards.";
       } else {
         window.close();
       }
