@@ -185,8 +185,8 @@ const CSS = `
     50%      { transform: translate(7%, -1%) rotate(6deg); }
   }
   @keyframes elfStride {
-    0%, 100% { transform: rotate(-32deg); }
-    50%      { transform: rotate(32deg); }
+    0%, 100% { transform: rotate(-24deg); }
+    50%      { transform: rotate(14deg); }
   }
   .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
   .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
