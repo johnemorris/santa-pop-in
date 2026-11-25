@@ -311,7 +311,7 @@ function blowCanes(b) {
 function scheduleCanes(actor, sackAtBack, total, signal, howMany) {
   if (!settings.santaActs.canes) return;
   for (let i = 0; i < howMany; i++) {
-    sleep(rand(0.2, 0.8) * total, signal).then(() => {
+    sleep((howMany > 3 ? rand(0.08, 0.92) : rand(0.2, 0.8)) * total, signal).then(() => {
       if (signal.aborted || !actor.isConnected) return;
       const r = actor.getBoundingClientRect();
       if (r.right < 0 || r.left > window.innerWidth) return;

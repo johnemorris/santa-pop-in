@@ -92,8 +92,9 @@ function sparkle(x, y, golden = false) {
 const SLEIGH_POSES = [
   { img: "images/sleigh.webp", rig: true },
   { img: "images/sleigh-lounge.webp" },
-  { img: "images/sleigh-handstand.webp" },
-  { img: "images/sleigh-swap.webp" },
+  { img: "images/sleigh-handstand.webp", canes: 7 }, // upside down: candy canes fall out of his pockets
+  // Role swap: Santa runs on foot pulling the sled (two-frame stride), so it never takes off.
+  { img: "images/sleigh-swap.webp", step: "images/sleigh-swap-step.webp", ground: true },
   { img: "images/sleigh-elf.webp" },
 ];
 let lastPose = -1;
@@ -115,8 +116,9 @@ async function actSleigh(signal) {
   const flip = ltr ? "" : " scaleX(-1)";
   const from = ltr ? -width - 10 : W + 10;
   const to = ltr ? W + 10 : -width - 10;
-  const duration = ((W + width + 20) / 210) * 1000; // reindeer are quick
-  const lift = Math.min(170, H * 0.24) * rand(0.7, 1);
+  const pose = pickSleighPose();
+  const duration = ((W + width + 20) / (pose.ground ? 150 : 210)) * 1000; // reindeer are quick, Santa on foot less so
+  const lift = pose.ground ? 0 : Math.min(170, H * 0.24) * rand(0.7, 1);
 
   // Run along the ground, take off in a gentle arc, glide back down.
   const N = 24;
@@ -127,24 +129,37 @@ async function actSleigh(signal) {
     const arc = t < 0.12 ? 0 : Math.sin(Math.PI * Math.min(1, (t - 0.12) / 0.8));
     const y = -lift * Math.pow(Math.max(0, arc), 1.4);
     const slope = Math.cos(Math.PI * Math.min(1, Math.max(0, (t - 0.12) / 0.8)));
-    const tilt = t < 0.12 || t > 0.92 ? 0 : -dir * 7 * slope;
+    const tilt = pose.ground || t < 0.12 || t > 0.92 ? 0 : -dir * 7 * slope;
     frames.push({ transform: `translate(${x}px,${y}px) rotate(${tilt}deg)${flip}`, offset: t });
   }
 
   const actor = el("div", { className: "actor", style: `bottom:${6 + Snow.heightAt(W / 2) * 0.5}px;` });
-  const pose = pickSleighPose();
   const body = pose.rig
     ? createRiggedSprite(url(pose.img), width, "rig-sleigh", "gallop", actor)
     : el("div", { className: "rig gallop", style: `width:${width}px;` }, actor);
   if (!pose.rig) el("img", { src: url(pose.img), alt: "", style: "width:100%;height:auto;" }, body);
+  let stride = null;
+  if (pose.step) {
+    // Alternate two stride frames so Santa's boots actually run.
+    const a = body.querySelector("img");
+    const b = el("img", { src: url(pose.step), alt: "", style: "width:100%;height:auto;position:absolute;left:0;top:0;opacity:0;" }, body);
+    body.style.position = "relative";
+    let on = false;
+    stride = setInterval(() => {
+      on = !on;
+      b.style.opacity = on ? "1" : "0";
+      a.style.opacity = on ? "0" : "1";
+    }, 170);
+  }
   const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
   const stopBells = Sound.sleigh(signal);
   makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1100);
-  scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, holiday ? 2 : Math.random() < 0.5 ? 1 : 0);
+  scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, pose.canes || (holiday ? 2 : Math.random() < 0.5 ? 1 : 0));
 
   const trail = setInterval(() => {
     if (!actor.isConnected || trip.playState !== "running") return;
     const r = actor.getBoundingClientRect();
+    if (pose.ground) return; // on foot: no magic sparkle trail
     if (r.bottom > H - 8 - 0.05 * r.height && trip.currentTime < duration * 0.14) return; // still on the ground
     const bx = ltr ? r.left + r.width * 0.06 : r.right - r.width * 0.06;
     if (Math.random() < (holiday ? 0.72 : 0.35)) {
@@ -156,13 +171,14 @@ async function actSleigh(signal) {
     if (!actor.isConnected || trip.playState !== "running") return;
     const r = actor.getBoundingClientRect();
     const bx = ltr ? r.left + r.width * 0.12 : r.right - r.width * 0.12;
-    const grounded = trip.currentTime < duration * 0.14 || trip.currentTime > duration * 0.9;
+    const grounded = pose.ground || trip.currentTime < duration * 0.14 || trip.currentTime > duration * 0.9;
     Snow.kick(bx, r.bottom - 6, dir, grounded ? 8 : 5);
   }, 40);
   try {
     await played(trip, signal);
   } finally {
     stopBells();
+    clearInterval(stride);
     clearInterval(trail);
     clearInterval(powder);
     actor.remove();
