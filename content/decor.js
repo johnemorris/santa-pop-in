@@ -254,8 +254,8 @@ const Decor = (() => {
     if (settings.santaDecor.trees) {
       // A faint smaller pine behind each corner tree on a soft snow drift, for depth.
       for (const side of ["l", "r"]) {
-        el("div", { className: `drift ${side}` }, box);
         const back = el("div", { className: `tree-far ${side}` }, box);
+        el("div", { className: `drift ${side}` }, box);
         el("img", { className: "tree-img", src: url("images/pine.webp"), alt: "" }, back);
       }
       trees = [createTree("l"), createTree("r")];
