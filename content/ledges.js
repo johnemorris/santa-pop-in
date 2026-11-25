@@ -259,7 +259,7 @@ const Ledges = (() => {
     let n = 0;
     for (const l of list) {
       if (!l.rect || l.sweeping) continue;
-      const top = 10 + Math.random() * 8;
+      const top = 22 + Math.random() * 12;
       for (let i = 0; i < l.h.length; i++) l.h[i] = Math.max(l.h[i], Math.min(capAt(l, i), top));
       n++;
     }
@@ -276,28 +276,54 @@ const Ledges = (() => {
     const wid = Math.round(hgt * ELF_RATIO);
     // The broom tip sits near the sprite's right edge when facing right.
     const tip = wid * 0.46;
-    const box = el("div", { className: "elfbox", style: `width:${wid}px;height:${hgt + 4}px;` });
+    const box = el("div", { className: "elfbox", style: `width:${wid}px;height:${hgt}px;` });
     const elf = el("div", { className: "elf", style: `width:${wid}px;` }, box);
-    // Facing is on its own wrapper so the pop-up and sway animations can't undo the flip.
+    // Facing is on its own wrapper so the pop-up and stride animations can't undo the flip.
     const face = el("div", { className: "elf-face", style: dir < 0 ? "transform:scaleX(-1)" : "" }, elf);
     const kid = girl ? "elf-girl" : "elf-boy";
-    for (const part of ["leg-b", "leg-f", "top"]) {
-      el("img", { src: url(`images/${kid}-${part}.webp`), alt: "", className: part === "top" ? "elf-top" : part }, face);
+    for (const [part, cls] of [["leg", "leg far"], ["leg", "leg"], ["body", "body"], ["arms", "arms"]]) {
+      el("img", { src: url(`images/${kid}-${part}.webp`), alt: "", className: cls }, face);
     }
-    let x = x0;
+    // Start a little in from the edge, where there's snow to come up out of.
+    let x = x0 + dir * wid * 0.4;
+    // Columns under the elf's feet (the back half of the sprite, behind the broom).
+    const feet = () => {
+      const a = Math.floor((dir > 0 ? x - wid * 0.5 : x) / COL), b = Math.ceil((dir > 0 ? x : x + wid * 0.5) / COL);
+      return [Math.max(0, a), Math.min(l.h.length - 1, b)];
+    };
+    const surface = () => {
+      const [a, b] = feet();
+      let m = 0;
+      for (let i = a; i <= b; i++) m = Math.max(m, l.h[i]);
+      return m;
+    };
+    // The box's bottom edge is the snow surface, so the elf is hidden below it: it comes up out of the snow.
     const place = () => {
       const r = l.rect;
       if (!r) return false;
       box.style.left = r.left + x - wid / 2 - dir * wid * 0.08 + "px";
-      box.style.top = r.top - hgt - 4 + "px";
+      box.style.top = r.top - hgt + "px";
+      box.style.height = Math.max(0, hgt - surface()) + "px";
       return true;
     };
     place();
     const r0 = l.rect;
-    burst(r0.left + x, r0.top - 6);
+    burst(r0.left + x, r0.top - surface() - 6);
     try {
       await elf.animate([{ transform: "translateY(100%)" }, { transform: "translateY(0)" }],
-        { duration: 380, easing: "cubic-bezier(.2,1.4,.4,1)", fill: "forwards" }).finished;
+        { duration: 650, easing: "cubic-bezier(.25,1.3,.45,1)", fill: "forwards" }).finished;
+      // Shake off the snow it came up through.
+      {
+        const [a, b] = feet();
+        let lifted = 0;
+        for (let i = a; i <= b; i++) { lifted += l.h[i]; l.h[i] = 0; }
+        if (lifted > 0.5 && l.rect) {
+          Snow.kick(l.rect.left + x - dir * wid * 0.25, l.rect.top - 4, -dir, Math.min(5, 2 + Math.floor(lifted / 20)));
+          Snow.kick(l.rect.left + x, l.rect.top - 4, dir, 2);
+        }
+        Snow.redraw();
+        place();
+      }
       const speed = Math.max(120, Math.abs(x1 - x0) / 3.5); // one elf does the whole card in a few seconds
       let last = performance.now();
       await new Promise((resolve) => {

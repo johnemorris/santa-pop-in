@@ -172,21 +172,21 @@ const CSS = `
   canvas.snow.back { opacity: .16; filter: blur(1.5px); }
   .ledgehit { position: fixed; pointer-events: auto; cursor: pointer; z-index: 1; }
   .elfbox { position: fixed; overflow: hidden; pointer-events: none; z-index: 3; }
-  .elfbox .elf { position: absolute; left: 0; bottom: 0; will-change: transform; }
-  /* Rigged elf: upper body + broom sways side to side from the waist, legs step in opposite phase. */
+  .elfbox .elf { position: absolute; left: 0; top: 0; will-change: transform; }
+  /* Rigged elf: arms + broom swing side to side from the shoulders, two legs stride front to back. */
   .elfbox .elf-face { position: relative; width: 100%; }
   .elfbox .elf-face img { position: absolute; left: 0; top: 0; width: 100%; height: auto; }
-  .elfbox .elf-face img.elf-top { position: relative; display: block; transform-origin: 26% 70%;
-                                  animation: elfSway .5s ease-in-out infinite; }
-  .elfbox .elf-face img.leg-b { transform-origin: 12% 76%; animation: elfStep .5s ease-in-out infinite; }
-  .elfbox .elf-face img.leg-f { transform-origin: 37% 76%; animation: elfStep .5s ease-in-out infinite; animation-delay: -.25s; }
-  @keyframes elfSway {
-    0%, 100% { transform: rotate(-5deg) translateX(-2%); }
-    50%      { transform: rotate(5deg) translateX(2%) translateY(-1%); }
+  .elfbox .elf-face img.body { position: relative; display: block; }
+  .elfbox .elf-face img.arms { transform-origin: 24% 50%; animation: elfBroom .56s ease-in-out infinite; }
+  .elfbox .elf-face img.leg { transform-origin: 37% 75%; animation: elfStride .56s ease-in-out infinite; }
+  .elfbox .elf-face img.leg.far { left: -9%; filter: brightness(.78); animation-delay: -.28s; }
+  @keyframes elfBroom {
+    0%, 100% { transform: translate(-7%, 1%) rotate(-6deg); }
+    50%      { transform: translate(7%, -1%) rotate(6deg); }
   }
-  @keyframes elfStep {
-    0%, 100% { transform: rotate(-17deg); }
-    50%      { transform: rotate(17deg); }
+  @keyframes elfStride {
+    0%, 100% { transform: rotate(-32deg); }
+    50%      { transform: rotate(32deg); }
   }
   .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
   .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
