@@ -232,15 +232,9 @@ const Ledges = (() => {
     sweeps++;
     Snow.wake();
     const g = gen;
-    const n = r.width < 360 ? 1 : r.width < 720 ? 2 : 3;
+    // One elf per card surface, sweeping the whole top in the direction it faces.
     const dir = Math.random() < 0.5 ? 1 : -1;
-    const seg = r.width / n;
-    let girl = Math.random() < 0.5;
-    const jobs = [];
-    for (let k = 0; k < n; k++) {
-      const a = k * seg, b = (k + 1) * seg;
-      jobs.push(elfSweep(l, dir > 0 ? a : b, dir > 0 ? b : a, dir, (girl = !girl), k * 260, g));
-    }
+    const jobs = [elfSweep(l, dir > 0 ? 0 : r.width, dir > 0 ? r.width : 0, dir, Math.random() < 0.5, 0, g)];
     try {
       await Promise.all(jobs);
     } finally {
@@ -251,22 +245,28 @@ const Ledges = (() => {
     }
   }
 
+  // Several snowy cards: each elf pops out at its own random moment within 2 seconds.
   function sweepAll() {
-    list.filter(snowy).forEach((l) => sweep(l));
+    const g = gen;
+    list.filter(snowy).forEach((l) => setTimeout(() => g === gen && sweep(l), Math.random() * 2000));
   }
 
   // One elf: sparkle, pop up from behind the card's top edge, sweep a stretch, sparkle away.
   async function elfSweep(l, x0, x1, dir, girl, delay, g) {
     await sleep(delay);
     if (g !== gen || !l.rect) return;
-    const hgt = Math.round(46 * sizeScale());
+    const hgt = Math.round(92 * sizeScale());
     const wid = Math.round(hgt * ELF_RATIO);
     // The broom tip sits near the sprite's right edge when facing right.
     const tip = wid * 0.46;
     const box = el("div", { className: "elfbox", style: `width:${wid}px;height:${hgt + 4}px;` });
     const elf = el("div", { className: "elf", style: `width:${wid}px;` }, box);
-    el("img", { src: url(girl ? "images/elf-girl.webp" : "images/elf-boy.webp"), alt: "",
-      style: dir < 0 ? "transform:scaleX(-1)" : "" }, elf);
+    // Facing is on its own wrapper so the pop-up and sway animations can't undo the flip.
+    const face = el("div", { className: "elf-face", style: dir < 0 ? "transform:scaleX(-1)" : "" }, elf);
+    const kid = girl ? "elf-girl" : "elf-boy";
+    for (const part of ["leg-b", "leg-f", "top"]) {
+      el("img", { src: url(`images/${kid}-${part}.webp`), alt: "", className: part === "top" ? "elf-top" : part }, face);
+    }
     let x = x0;
     const place = () => {
       const r = l.rect;
@@ -281,7 +281,7 @@ const Ledges = (() => {
     try {
       await elf.animate([{ transform: "translateY(100%)" }, { transform: "translateY(0)" }],
         { duration: 380, easing: "cubic-bezier(.2,1.4,.4,1)", fill: "forwards" }).finished;
-      const speed = 95; // px/s, a busy little sweep
+      const speed = Math.max(120, Math.abs(x1 - x0) / 3.5); // one elf does the whole card in a few seconds
       let last = performance.now();
       await new Promise((resolve) => {
         const step = (now) => {

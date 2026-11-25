@@ -173,11 +173,20 @@ const CSS = `
   .ledgehit { position: fixed; pointer-events: auto; cursor: pointer; z-index: 1; }
   .elfbox { position: fixed; overflow: hidden; pointer-events: none; z-index: 3; }
   .elfbox .elf { position: absolute; left: 0; bottom: 0; will-change: transform; }
-  .elfbox .elf img { width: 100%; height: auto; animation: sweepBob .32s ease-in-out infinite;
-                     transform-origin: 40% 100%; }
-  @keyframes sweepBob {
-    0%, 100% { transform: rotate(-4deg) translateY(0); }
-    50%      { transform: rotate(5deg) translateY(-2px); }
+  /* Rigged elf: upper body + broom sways side to side from the waist, legs step in opposite phase. */
+  .elfbox .elf-face { position: relative; width: 100%; }
+  .elfbox .elf-face img { position: absolute; left: 0; top: 0; width: 100%; height: auto; }
+  .elfbox .elf-face img.elf-top { position: relative; display: block; transform-origin: 26% 70%;
+                                  animation: elfSway .5s ease-in-out infinite; }
+  .elfbox .elf-face img.leg-b { transform-origin: 12% 76%; animation: elfStep .5s ease-in-out infinite; }
+  .elfbox .elf-face img.leg-f { transform-origin: 37% 76%; animation: elfStep .5s ease-in-out infinite; animation-delay: -.25s; }
+  @keyframes elfSway {
+    0%, 100% { transform: rotate(-5deg) translateX(-2%); }
+    50%      { transform: rotate(5deg) translateX(2%) translateY(-1%); }
+  }
+  @keyframes elfStep {
+    0%, 100% { transform: rotate(-17deg); }
+    50%      { transform: rotate(17deg); }
   }
   .pilehit { position: fixed; bottom: 0; pointer-events: auto; cursor: pointer; z-index: 1; }
   .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
