@@ -92,7 +92,7 @@ function sparkle(x, y, golden = false) {
 const SLEIGH_POSES = [
   { img: "images/sleigh.webp", rig: true },
   { img: "images/sleigh-lounge.webp" },
-  { img: "images/sleigh-handstand.webp", canes: 7 }, // upside down: candy canes fall out of his pockets
+  { img: "images/sleigh-handstand.webp", canes: 7, pocket: [0.2, 0.34, 0.36] }, // upside down: candy canes fall out of his pockets
   // Role swap: Santa runs on foot pulling the sled (two-frame stride), so it never takes off.
   { img: "images/sleigh-swap.webp", step: "images/sleigh-swap-step.webp", ground: true },
   { img: "images/sleigh-elf.webp" },
@@ -154,7 +154,10 @@ async function actSleigh(signal) {
   const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
   const stopBells = Sound.sleigh(signal);
   makeDanceable(actor, body, () => trip, signal, HOP_FRAMES, 1100);
-  scheduleCanes(actor, () => (ltr ? 0.08 : 0.92), duration, signal, pose.canes || (holiday ? 2 : Math.random() < 0.5 ? 1 : 0));
+  const caneX = pose.pocket
+    ? () => { const f = rand(pose.pocket[0], pose.pocket[1]); return ltr ? f : 1 - f; } // out of his upside-down pockets
+    : () => (ltr ? 0.08 : 0.92);
+  scheduleCanes(actor, caneX, duration, signal, pose.canes || (holiday ? 2 : Math.random() < 0.5 ? 1 : 0), pose.pocket ? pose.pocket[2] : 0.45);
 
   const trail = setInterval(() => {
     if (!actor.isConnected || trip.playState !== "running") return;

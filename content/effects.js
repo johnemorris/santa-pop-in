@@ -308,7 +308,7 @@ function blowCanes(b) {
   }
 }
 
-function scheduleCanes(actor, sackAtBack, total, signal, howMany) {
+function scheduleCanes(actor, sackAtBack, total, signal, howMany, atY = 0.45) {
   if (!settings.santaActs.canes) return;
   for (let i = 0; i < howMany; i++) {
     sleep((howMany > 3 ? rand(0.08, 0.92) : rand(0.2, 0.8)) * total, signal).then(() => {
@@ -316,7 +316,7 @@ function scheduleCanes(actor, sackAtBack, total, signal, howMany) {
       const r = actor.getBoundingClientRect();
       if (r.right < 0 || r.left > window.innerWidth) return;
       const x = r.left + r.width * sackAtBack();
-      dropCane(x, r.top + r.height * 0.45);
+      dropCane(x, r.top + r.height * atY);
     });
   }
 }

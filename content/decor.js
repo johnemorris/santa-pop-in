@@ -92,24 +92,24 @@ const Decor = (() => {
     const mode = resolveLightMode();
     const greens = ["#185232", "#1f6a3e", "#2a7d4a", "#3a8f55", "#123d24"];
     const R = Math.min(38, Math.max(26, W * 0.027)); // wreath radius
-    const cx0 = R + 14, cx1 = W - R - 14, cy = R + 12;
+    const cx0 = R + 10, cx1 = W - R - 10, cy = R + 6;
     const pts = [];
-    // Loose swags across the top, wreath to wreath.
+    // Shallow swags hugging the top edge, wreath to wreath (kept tight so it never crowds the page).
     const sx0 = cx0 + R * 0.9, sx1 = cx1 - R * 0.9;
     const n = Math.max(2, Math.round((sx1 - sx0) / 430));
-    const sag = Math.min(34, H * 0.045);
+    const sag = Math.min(9, H * 0.012);
     for (let k = 0; k < n; k++) {
       const a = sx0 + ((sx1 - sx0) * k) / n, b = sx0 + ((sx1 - sx0) * (k + 1)) / n;
       const steps = Math.max(4, Math.round((b - a) / 7));
       for (let i = 0; i < steps; i++) {
         const t = i / steps;
-        pts.push({ x: a + (b - a) * t, y: cy - 4 + 4 * sag * t * (1 - t) });
+        pts.push({ x: a + (b - a) * t, y: 9 + 4 * sag * t * (1 - t) });
       }
     }
-    // Hanging down each side to about halfway, with a little sway.
+    // A short tail down each side, about a quarter of the way, with a little sway.
     const drops = [];
     for (const x of [cx0 - R * 0.35, cx1 + R * 0.35]) {
-      const y0 = cy + R + 26, y1 = H * 0.5;
+      const y0 = cy + R + 20, y1 = Math.max(y0 + 40, H * 0.26);
       const steps = Math.round((y1 - y0) / 7);
       for (let i = 0; i <= steps; i++) {
         const y = y0 + ((y1 - y0) * i) / steps;
