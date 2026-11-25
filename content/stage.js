@@ -13,6 +13,9 @@ const CSS = `
              -webkit-user-drag: none; border: 0; }
   .click { pointer-events: auto; cursor: pointer; }
   .waddle { animation: waddle 0.62s cubic-bezier(.45,0,.55,1) infinite; transform-origin: 50% 100%; }
+  .santa-leg { position: absolute; height: auto; transform-origin: 50% 6%; animation: santaStride .46s ease-in-out infinite; }
+  .santa-leg.far { filter: brightness(.72); animation-delay: -.23s; }
+  @keyframes santaStride { 0%, 100% { transform: rotate(-38deg); } 50% { transform: rotate(34deg); } }
   .gallop { animation: gallop 0.36s ease-in-out infinite; transform-origin: 60% 80%; }
   .bob    { animation: bob 3.4s ease-in-out infinite; }
   .rumble { animation: rumble 0.09s linear infinite; }

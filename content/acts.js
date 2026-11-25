@@ -93,8 +93,8 @@ const SLEIGH_POSES = [
   { img: "images/sleigh.webp", rig: true },
   { img: "images/sleigh-lounge.webp" },
   { img: "images/sleigh-handstand.webp", canes: 7, pocket: [0.2, 0.34, 0.36] }, // upside down: candy canes fall out of his pockets
-  // Role swap: Santa runs on foot pulling the sled (two-frame stride), so it never takes off.
-  { img: "images/sleigh-swap.webp", step: "images/sleigh-swap-step.webp", ground: true },
+  // Role swap: Santa runs on foot pulling the sled (rigged legs swing from the hips), so it never takes off.
+  { img: "images/sleigh-swap.webp", legs: { img: "images/santa-leg.webp", hips: [0.783, 0.828], top: 0.69, w: 0.068 }, ground: true },
   { img: "images/sleigh-elf.webp" },
 ];
 let lastPose = -1;
@@ -138,18 +138,18 @@ async function actSleigh(signal) {
     ? createRiggedSprite(url(pose.img), width, "rig-sleigh", "gallop", actor)
     : el("div", { className: "rig gallop", style: `width:${width}px;` }, actor);
   if (!pose.rig) el("img", { src: url(pose.img), alt: "", style: "width:100%;height:auto;" }, body);
-  let stride = null;
-  if (pose.step) {
-    // Alternate two stride frames so Santa's boots actually run.
-    const a = body.querySelector("img");
-    const b = el("img", { src: url(pose.step), alt: "", style: "width:100%;height:auto;position:absolute;left:0;top:0;opacity:0;" }, body);
+  if (pose.legs) {
+    // Two legs behind the coat, swinging front-to-back in opposite phase: a real running stride.
+    const L = pose.legs;
     body.style.position = "relative";
-    let on = false;
-    stride = setInterval(() => {
-      on = !on;
-      b.style.opacity = on ? "1" : "0";
-      a.style.opacity = on ? "0" : "1";
-    }, 170);
+    body.querySelector("img").style.position = "relative"; // keep the coat painted over the hips
+    L.hips.forEach((hx, i) => {
+      const leg = el("img", {
+        src: url(L.img), alt: "", className: `santa-leg${i === 0 ? " far" : ""}`,
+        style: `left:${((hx - L.w / 2) * 100).toFixed(2)}%;top:${(L.top * 100).toFixed(2)}%;width:${(L.w * 100).toFixed(2)}%;`,
+      }, body);
+      body.insertBefore(leg, body.firstChild);
+    });
   }
   const trip = actor.animate(frames, { duration, easing: "linear", fill: "forwards" });
   const stopBells = Sound.sleigh(signal);
@@ -181,7 +181,6 @@ async function actSleigh(signal) {
     await played(trip, signal);
   } finally {
     stopBells();
-    clearInterval(stride);
     clearInterval(trail);
     clearInterval(powder);
     actor.remove();

@@ -36,7 +36,7 @@ const Decor = (() => {
     const sides = [
       D.garland ? null : [m, m, W - m, m],
       [W - m, m, W - m, H - m],
-      D.snowBase ? null : [W - m, H - m, m, H - m],
+      D.trees ? null : [W - m, H - m, m, H - m],
       [m, H - m, m, m],
     ].filter(Boolean);
     let d = "", bulbs = "", k = 0;
@@ -242,13 +242,13 @@ const Decor = (() => {
     const want =
       isActiveHere() &&
       !document.fullscreenElement &&
-      (settings.santaDecor.lights || settings.santaDecor.trees || settings.santaDecor.garland || settings.santaDecor.snowBase);
+      (settings.santaDecor.lights || settings.santaDecor.trees || settings.santaDecor.garland);
     clear();
     if (!want) return;
     ensureStage();
     box = el("div", { className: "decor" });
     layer.prepend(box);
-    if (settings.santaDecor.snowBase) box.append(snowBase(window.innerWidth));
+    if (settings.santaDecor.trees) box.append(snowBase(window.innerWidth));
     if (settings.santaDecor.garland) box.append((wreathing = garland(window.innerWidth, window.innerHeight)));
     if (settings.santaDecor.lights) box.append(lights(window.innerWidth, window.innerHeight));
     if (settings.santaDecor.trees) {
