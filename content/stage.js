@@ -211,13 +211,17 @@ const CSS = `
   .tree-wrap.r.back { transform: translateX(50%) scale(.9); }
   .tree-img { height: 100%; width: auto; display: block; }
   .tree-far { position: fixed; bottom: 24px; height: min(140px, 18vh); opacity: .5;
-              filter: blur(.5px) saturate(.6) brightness(1.1); pointer-events: none; }
+              filter: blur(.5px) saturate(.6) brightness(1.1); pointer-events: none;
+              transition: opacity .3s ease, filter .3s ease; }
+  .tree-far.back { opacity: .08; filter: blur(1.5px) saturate(.6); }
   .tree-far.l { left: clamp(8px, 2.2vw, 34px); }
   .tree-far.r { right: clamp(8px, 2.2vw, 34px); }
   .drift { position: fixed; bottom: -8px; width: clamp(150px, 14vw, 200px); height: 50px; pointer-events: none;
            border-radius: 50% 50% 0 0 / 100% 100% 0 0;
            background: radial-gradient(ellipse at 50% 0%, #ffffff 0%, #f1f6fc 45%, #dde8f5 100%);
            box-shadow: 0 -1px 6px rgba(255,255,255,.35); opacity: .9; }
+  .drift { transition: opacity .3s ease; }
+  .drift.back { opacity: .12; }
   .drift.l { left: -40px; }
   .drift.r { right: -40px; }
   .tree-ornaments { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }

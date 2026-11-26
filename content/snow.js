@@ -202,7 +202,9 @@ const Snow = (() => {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Snow kicked up by the blower, and the wind streaks.
     for (const p of puffs) {
-      const k = Math.max(0, 1 - p.age / p.life);
+      // Swept powder stays solid for most of its flight, then fades over its last stretch.
+      const left = Math.max(0, 1 - p.age / p.life);
+      const k = p.powder ? Math.min(1, left / 0.35) : left;
       ctx.globalAlpha = k * p.a;
       if (p.streak) {
         ctx.strokeStyle = "#9fb4cf";
@@ -303,7 +305,8 @@ const Snow = (() => {
       p.age += dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (!p.streak) { p.vy += 120 * dt; p.vx *= 1 - 1.2 * dt; }
+      if (p.powder) { p.vy = Math.min(p.vy + 70 * dt, 38); p.vx *= 1 - 1.6 * dt; }
+      else if (!p.streak) { p.vy += 120 * dt; p.vx *= 1 - 1.2 * dt; }
       if (p.age >= p.life) puffs.splice(i, 1);
     }
 
@@ -392,10 +395,10 @@ const Snow = (() => {
   window.addEventListener("resize", resize);
 
   function kick(x, y, dir, n = 3) {
-    for (let k = 0; k < n && puffs.length < 260; k++) {
+    for (let k = 0; k < n && puffs.length < 420; k++) {
       puffs.push({
         x: x + rand(-8, 8), y: y + rand(-8, 6), r: rand(1.4, 3.4), a: rand(0.6, 0.95), powder: true,
-        vx: -dir * rand(60, 200), vy: rand(-70, 5), age: 0, life: rand(1.1, 2.0),
+        vx: -dir * rand(60, 200), vy: rand(-70, 5), age: 0, life: rand(2.6, 3.6),
       });
     }
     wake();
