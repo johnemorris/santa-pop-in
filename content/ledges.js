@@ -13,9 +13,20 @@ const Ledges = (() => {
   const SLOPE = 1.9; // px of rise per column (~32 degrees, snow's angle of repose)
   const LIP = 1.5; // snow right at a card edge slides off
   const ELF_RATIO = 227 / 200; // elf sprite width / height
+  const CLOUD_GAP = 50; // a pile stops growing this far below the cloud and spills over the card's edges
+  // Three different elves at most on the page; one that finishes can go on to another snowy card.
+  const ELVES = [
+    { kid: "elf-boy", speed: 1, beat: 0.56, size: 1 },
+    { kid: "elf-girl", speed: 0.82, beat: 0.64, size: 0.94 },
+    { kid: "elf-red", speed: 1.2, beat: 0.5, size: 1.05 },
+  ];
   let list = []; // { el, h, rect, hit, sweeping }
   let lastScan = 0;
   let sweeps = 0;
+  let queue = []; // cards waiting for an elf
+  const free = new Set([0, 1, 2]); // elves not out right now
+  let nextStart = 0; // elves pop out 1-2 s apart
+  let pumpT = null;
   let gen = 0;
   let scrollQueued = false;
 
@@ -66,6 +77,10 @@ const Ledges = (() => {
       for (let i = 0; i < n; i++) next[i] = old[Math.floor((i / n) * old.length)];
       l.h = next;
     }
+    // Snow only sits on the flat part of the top, not on rounded corners.
+    const cs = getComputedStyle(l.el);
+    l.padL = Math.ceil((parseFloat(cs.borderTopLeftRadius) || 0) / COL);
+    l.padR = Math.ceil((parseFloat(cs.borderTopRightRadius) || 0) / COL);
     l.rect = r;
     return r;
   }
@@ -90,7 +105,8 @@ const Ledges = (() => {
   // hold, then slides to the neighbours (and off the card's edges).
   function capAt(l, i) {
     const n = l.h.length;
-    const fromEnd = Math.min(i, n - 1 - i);
+    const fromEnd = Math.min(i - (l.padL || 0), n - 1 - (l.padR || 0) - i);
+    if (fromEnd < 0) return 0;
     return Math.min(CAP, LIP + fromEnd * SLOPE);
   }
   function settle(l, i) {
@@ -115,10 +131,24 @@ const Ledges = (() => {
     if (!on()) return false;
     for (const l of list) {
       const r = l.rect;
-      if (!r || l.sweeping || f.x < r.left + 1 || f.x > r.right - 1) continue;
+      if (!r || l.sweeping) continue;
+      if (f.x < r.left || f.x > r.right) continue;
+      const x0 = r.left + (l.padL || 0) * COL, x1 = r.right - (l.padR || 0) * COL;
       const i = Math.floor((f.x - r.left) / COL);
       const top = r.top - l.h[i];
       if (prevY < top && f.y >= top) {
+        // A rounded corner holds no snow, and a heap that has grown to within 50 px of the
+        // cloud stops growing: either way the flake slides off the card's nearer side.
+        const room = f.sy != null ? r.top - f.sy - CLOUD_GAP : Infinity;
+        let peak = 0;
+        for (let j = 0; j < l.h.length; j++) peak = Math.max(peak, l.h[j]);
+        if (f.x < x0 + 1 || f.x > x1 - 1 || peak + f.r >= room) {
+          const left = f.x - r.left < r.right - f.x;
+          f.x = left ? r.left - 4 - Math.random() * 8 : r.right + 4 + Math.random() * 8;
+          f.y = Math.max(f.y, r.top - 2);
+          f.sway = Math.min(f.sway || 0, 6);
+          return false;
+        }
         const spread = [0.3, 0.7, 1, 0.7, 0.3];
         for (let k = -2; k <= 2; k++) {
           const j = i + k;
@@ -140,15 +170,32 @@ const Ledges = (() => {
         if (l.hit) l.hit.style.display = "none";
         continue;
       }
-      ctx.beginPath();
-      ctx.moveTo(r.left, r.top + 1);
+      // Draw only where snow has actually built up, so nothing outlines the bare card.
+      const MIN = 0.6;
+      const xAt = (i) => Math.min(r.right, r.left + i * COL);
+      const fillPath = new Path2D(), rim = new Path2D();
       let peak = 0;
       for (let i = 0; i < l.h.length; i++) {
-        ctx.lineTo(Math.min(r.right, r.left + i * COL), r.top - l.h[i]);
-        peak = Math.max(peak, l.h[i]);
+        if (l.h[i] <= MIN) continue;
+        let j = i;
+        while (j + 1 < l.h.length && l.h[j + 1] > MIN) j++;
+        const a = Math.max(0, i - 1), b = Math.min(l.h.length - 1, j + 1);
+        fillPath.moveTo(xAt(a), r.top + 0.5);
+        rim.moveTo(xAt(a), r.top);
+        for (let k = i; k <= j; k++) {
+          fillPath.lineTo(xAt(k), r.top - l.h[k]);
+          rim.lineTo(xAt(k), r.top - l.h[k]);
+          peak = Math.max(peak, l.h[k]);
+        }
+        fillPath.lineTo(xAt(b), r.top + 0.5);
+        rim.lineTo(xAt(b), r.top);
+        fillPath.closePath();
+        i = j;
       }
-      ctx.lineTo(r.right, r.top + 1);
-      ctx.closePath();
+      if (peak <= MIN) {
+        if (l.hit) l.hit.style.display = "none";
+        continue;
+      }
       const grad = ctx.createLinearGradient(0, r.top - peak, 0, r.top + 1);
       grad.addColorStop(0, "#ffffff");
       grad.addColorStop(1, "#e3ebf6");
@@ -157,11 +204,11 @@ const Ledges = (() => {
       ctx.shadowColor = "rgba(70,100,150,.45)";
       ctx.shadowBlur = 4;
       ctx.shadowOffsetY = -1;
-      ctx.fill();
+      ctx.fill(fillPath);
       ctx.restore();
-      ctx.strokeStyle = "rgba(110,140,185,.7)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
+      ctx.strokeStyle = "rgba(110,140,185,.6)";
+      ctx.lineWidth = 1;
+      ctx.stroke(rim);
       placeHit(l, r, peak);
     }
   }
@@ -223,52 +270,75 @@ const Ledges = (() => {
     step();
   }
 
-  async function sweep(l) {
+  // Ask for an elf to sweep this card. At most three elves are out at once, each one
+  // different; they pop out 1-2 s apart, and one that's done takes the next snowy card.
+  function sweep(l) {
     if (l.sweeping || !snowy(l)) return;
     if (!settings.santaActs.elves) return melt(l);
+    if (!queue.includes(l)) queue.push(l);
+    pump();
+  }
+  function pump() {
+    if (pumpT) return;
+    queue = queue.filter((l) => !l.sweeping && snowy(l) && l.el.isConnected);
+    if (!queue.length || !free.size) return;
+    const wait = Math.max(0, nextStart - performance.now());
+    if (wait > 0) {
+      pumpT = setTimeout(() => { pumpT = null; pump(); }, wait);
+      return;
+    }
+    const l = queue.shift();
+    const ids = [...free];
+    const id = ids[Math.floor(Math.random() * ids.length)];
+    nextStart = performance.now() + 1000 + Math.random() * 1000;
+    runElf(l, id);
+    if (queue.length) pump();
+  }
+  async function runElf(l, id) {
     const r = measure(l);
     if (!r) return;
+    free.delete(id);
     l.sweeping = true;
     sweeps++;
     Snow.wake();
     const g = gen;
     // One elf per card surface, sweeping the whole top in the direction it faces.
     const dir = Math.random() < 0.5 ? 1 : -1;
-    const jobs = [elfSweep(l, dir > 0 ? 0 : r.width, dir > 0 ? r.width : 0, dir, Math.random() < 0.5, 0, g)];
     try {
-      await Promise.all(jobs);
+      await elfSweep(l, dir > 0 ? 0 : r.width, dir > 0 ? r.width : 0, dir, ELVES[id], g);
     } finally {
       if (l.h) l.h.fill(0);
       l.sweeping = false;
       sweeps = Math.max(0, sweeps - 1);
       Snow.redraw();
+      if (g === gen) {
+        free.add(id);
+        pump();
+      }
     }
   }
 
-  // Several snowy cards: elves pop out one after another, in random order, 1-2 seconds apart.
+  // After a storm: every snowy card goes in the queue, in random order.
   function sweepAll() {
-    const g = gen;
-    const cards = list.filter(snowy).sort(() => Math.random() - 0.5);
-    let t = Math.random() * 400;
-    for (const l of cards) {
-      setTimeout(() => g === gen && sweep(l), t);
-      t += 1000 + Math.random() * 1000;
-    }
+    list.filter(snowy).sort(() => Math.random() - 0.5).forEach(sweep);
   }
 
   // One elf: sparkle, pop up from behind the card's top edge, sweep a stretch, sparkle away.
-  async function elfSweep(l, x0, x1, dir, girl, delay, g) {
-    await sleep(delay);
+  async function elfSweep(l, x0, x1, dir, who, g) {
     if (g !== gen || !l.rect) return;
-    const hgt = Math.round(92 * sizeScale());
+    const hgt = Math.round(92 * sizeScale() * who.size);
     const wid = Math.round(hgt * ELF_RATIO);
     // The broom tip sits near the sprite's right edge when facing right.
     const tip = wid * 0.46;
     const box = el("div", { className: "elfbox", style: `width:${wid}px;height:${hgt}px;` });
     const elf = el("div", { className: "elf", style: `width:${wid}px;` }, box);
     // Facing is on its own wrapper so the pop-up and stride animations can't undo the flip.
-    const face = el("div", { className: "elf-face", style: dir < 0 ? "transform:scaleX(-1)" : "" }, elf);
-    const kid = girl ? "elf-girl" : "elf-boy";
+    const beat = (who.beat * (0.92 + Math.random() * 0.16)).toFixed(2);
+    const face = el("div", {
+      className: "elf-face",
+      style: `${dir < 0 ? "transform:scaleX(-1);" : ""}--beat:${beat}s;`,
+    }, elf);
+    const kid = who.kid;
     for (const [part, cls] of [["leg", "leg far"], ["leg", "leg"], ["body", "body"], ["arms", "arms"]]) {
       el("img", { src: url(`images/${kid}-${part}.webp`), alt: "", className: cls }, face);
     }
@@ -312,7 +382,8 @@ const Ledges = (() => {
         Snow.redraw();
         place();
       }
-      const speed = Math.max(120, Math.abs(x1 - x0) / 3.5); // one elf does the whole card in a few seconds
+      // One elf does the whole card in a few seconds; each has its own pace.
+      const speed = Math.max(120, Math.abs(x1 - x0) / 3.5) * who.speed * (0.9 + Math.random() * 0.2);
       let last = performance.now();
       await new Promise((resolve) => {
         const step = (now) => {
@@ -354,6 +425,11 @@ const Ledges = (() => {
   function clear() {
     gen++;
     sweeps = 0;
+    queue = [];
+    clearTimeout(pumpT);
+    pumpT = null;
+    nextStart = 0;
+    [0, 1, 2].forEach((i) => free.add(i));
     list.forEach((l) => l.hit?.remove());
     list = [];
   }

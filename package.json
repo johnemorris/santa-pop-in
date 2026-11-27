@@ -1,6 +1,6 @@
 {
   "name": "santa-pop-in",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Santa Pop-In Chrome extension",
   "scripts": {
     "lint": "for f in settings.js content/*.js background.js popup.js scripts/*.js test/*.js; do node --check \"$f\" || exit 1; done",

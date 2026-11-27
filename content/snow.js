@@ -237,7 +237,7 @@ const Snow = (() => {
       while (n > 0) {
         if (Math.random() < n && flakes.length < 700) {
           flakes.push({
-            x: rand(s.x0, s.x1), y: s.y, r: rand(1.3, 3), a: rand(0.8, 1),
+            x: rand(s.x0, s.x1), y: s.y, sy: s.y, r: rand(1.3, 3), a: rand(0.8, 1),
             vy: rand(30, 55), phase: Math.random() * 6.28, sway: rand(14, 30),
             drift: rand(-14, 14), flutter: rand(1.1, 1.9),
             rot: Math.random() * Math.PI, spin: rand(-1.2, 1.2), kind: Math.floor(Math.random() * FLAKE_KINDS),

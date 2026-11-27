@@ -178,9 +178,9 @@ const CSS = `
   .elfbox .elf-face { position: relative; width: 100%; }
   .elfbox .elf-face img { position: absolute; left: 0; top: 0; width: 100%; height: auto; }
   .elfbox .elf-face img.body { position: relative; display: block; }
-  .elfbox .elf-face img.arms { transform-origin: 24% 50%; animation: elfBroom .56s ease-in-out infinite; }
-  .elfbox .elf-face img.leg { left: -8%; transform-origin: 37% 75%; animation: elfStride .56s ease-in-out infinite; }
-  .elfbox .elf-face img.leg.far { left: -17%; filter: brightness(.78); animation-delay: -.28s; }
+  .elfbox .elf-face img.arms { transform-origin: 24% 50%; animation: elfBroom var(--beat, .56s) ease-in-out infinite; }
+  .elfbox .elf-face img.leg { left: -8%; transform-origin: 37% 75%; animation: elfStride var(--beat, .56s) ease-in-out infinite; }
+  .elfbox .elf-face img.leg.far { left: -17%; filter: brightness(.78); animation-delay: calc(var(--beat, .56s) / -2); }
   @keyframes elfBroom {
     0%, 100% { transform: translate(-7%, 1%) rotate(-6deg); }
     50%      { transform: translate(7%, -1%) rotate(6deg); }
