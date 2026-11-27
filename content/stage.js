@@ -171,7 +171,8 @@ const CSS = `
                 transition: opacity .3s ease, filter .3s ease; }
   canvas.snow.back { opacity: .16; filter: blur(1.5px); }
   .ledgehit { position: fixed; pointer-events: auto; cursor: pointer; z-index: 1; }
-  .elfbox { position: fixed; overflow: hidden; pointer-events: none; z-index: 3; }
+  /* Elves sit just above the card snow and always below Santa (.actor z 2). */
+  .elfbox { position: fixed; overflow: hidden; pointer-events: none; z-index: 1; }
   .elfbox .elf { position: absolute; left: 0; top: 0; will-change: transform; }
   /* Rigged elf: arms + broom swing side to side from the shoulders, two legs stride front to back. */
   .elfbox .elf-face { position: relative; width: 100%; }

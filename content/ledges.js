@@ -245,10 +245,15 @@ const Ledges = (() => {
     }
   }
 
-  // Several snowy cards: each elf pops out at its own random moment within 2 seconds.
+  // Several snowy cards: elves pop out one after another, in random order, 1-2 seconds apart.
   function sweepAll() {
     const g = gen;
-    list.filter(snowy).forEach((l) => setTimeout(() => g === gen && sweep(l), Math.random() * 2000));
+    const cards = list.filter(snowy).sort(() => Math.random() - 0.5);
+    let t = Math.random() * 400;
+    for (const l of cards) {
+      setTimeout(() => g === gen && sweep(l), t);
+      t += 1000 + Math.random() * 1000;
+    }
   }
 
   // One elf: sparkle, pop up from behind the card's top edge, sweep a stretch, sparkle away.
