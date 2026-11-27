@@ -78,9 +78,20 @@ const Ledges = (() => {
       l.h = next;
     }
     // Snow only sits on the flat part of the top, not on rounded corners.
-    const cs = getComputedStyle(l.el);
-    l.padL = Math.ceil((parseFloat(cs.borderTopLeftRadius) || 0) / COL);
-    l.padR = Math.ceil((parseFloat(cs.borderTopRightRadius) || 0) / COL);
+    // The rounding can sit on the card or on a child flush with its top corner, so take the
+    // largest radius found there, plus one column of margin.
+    let rl = 0, rr = 0;
+    const px = (v, w) => (String(v).endsWith("%") ? (parseFloat(v) / 100) * w : parseFloat(v)) || 0;
+    const look = [l.el, ...[...l.el.children].slice(0, 6)];
+    for (const e of look) {
+      const b = e === l.el ? r : e.getBoundingClientRect();
+      if (Math.abs(b.top - r.top) > 3) continue;
+      const cs = getComputedStyle(e);
+      if (Math.abs(b.left - r.left) <= 3) rl = Math.max(rl, px(cs.borderTopLeftRadius, b.width));
+      if (Math.abs(b.right - r.right) <= 3) rr = Math.max(rr, px(cs.borderTopRightRadius, b.width));
+    }
+    l.padL = rl > 0 ? Math.ceil(rl / COL) + 1 : 0;
+    l.padR = rr > 0 ? Math.ceil(rr / COL) + 1 : 0;
     l.rect = r;
     return r;
   }
@@ -171,24 +182,25 @@ const Ledges = (() => {
         continue;
       }
       // Draw only where snow has actually built up, so nothing outlines the bare card.
-      const MIN = 0.6;
-      const xAt = (i) => Math.min(r.right, r.left + i * COL);
+      // Under 2 px it reads as a line on the card's edge, so thin dustings stay invisible.
+      const MIN = 2;
+      const lo = l.padL || 0, hi = l.h.length - 1 - (l.padR || 0);
+      const xAt = (i) => Math.min(r.right, r.left + Math.max(lo, Math.min(hi, i)) * COL);
       const fillPath = new Path2D(), rim = new Path2D();
       let peak = 0;
       for (let i = 0; i < l.h.length; i++) {
         if (l.h[i] <= MIN) continue;
         let j = i;
         while (j + 1 < l.h.length && l.h[j + 1] > MIN) j++;
-        const a = Math.max(0, i - 1), b = Math.min(l.h.length - 1, j + 1);
+        const a = Math.max(lo, i - 1), b = Math.min(hi, j + 1);
         fillPath.moveTo(xAt(a), r.top + 0.5);
-        rim.moveTo(xAt(a), r.top);
+        rim.moveTo(xAt(i), r.top - l.h[i]);
         for (let k = i; k <= j; k++) {
           fillPath.lineTo(xAt(k), r.top - l.h[k]);
           rim.lineTo(xAt(k), r.top - l.h[k]);
           peak = Math.max(peak, l.h[k]);
         }
         fillPath.lineTo(xAt(b), r.top + 0.5);
-        rim.lineTo(xAt(b), r.top);
         fillPath.closePath();
         i = j;
       }
@@ -201,14 +213,19 @@ const Ledges = (() => {
       grad.addColorStop(1, "#e3ebf6");
       ctx.fillStyle = grad;
       ctx.save();
+      // Nothing (not even the soft shadow) may spill onto the card's face or its corners.
+      const clip = new Path2D();
+      clip.rect(xAt(lo) - 1, r.top - CAP - 20, xAt(hi) - xAt(lo) + 2, CAP + 20 + 0.5);
+      ctx.clip(clip);
       ctx.shadowColor = "rgba(70,100,150,.45)";
       ctx.shadowBlur = 4;
       ctx.shadowOffsetY = -1;
       ctx.fill(fillPath);
-      ctx.restore();
-      ctx.strokeStyle = "rgba(110,140,185,.6)";
+      ctx.shadowColor = "transparent";
+      ctx.strokeStyle = `rgba(110,140,185,${Math.min(0.6, (peak - MIN) / 10).toFixed(2)})`;
       ctx.lineWidth = 1;
       ctx.stroke(rim);
+      ctx.restore();
       placeHit(l, r, peak);
     }
   }
