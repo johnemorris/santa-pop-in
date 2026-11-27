@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Santa Pop-In",
   "description": "A tiny Santa who pops in with holiday surprises, a Christmas countdown sign, snow clouds, candy canes, lights, and snowy pines.",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "minimum_chrome_version": "102",
   "permissions": [
     "storage",
