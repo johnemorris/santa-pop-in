@@ -6,7 +6,7 @@
 // Lights around the edge of the window and half a snowy pine in each bottom
 // corner. Purely decorative: never catches a click, hidden in fullscreen.
 const Decor = (() => {
-  let box = null, resizeT = null, trees = [], wreathing = null, hoverRaf = 0, mx = -1, my = -1;
+  let box = null, resizeT = null, trees = [], fars = [], drifts = [], wreathing = null, hoverRaf = 0, mx = -1, my = -1;
   const PALETTES = {
     classic: ["#ff3b3b", "#2ecc40", "#ffd23f", "#3b8bff"],
     warm: ["#ffe8a3", "#ffd166", "#ffb703", "#fff4cc"],
@@ -255,7 +255,8 @@ const Decor = (() => {
       // A faint smaller pine behind each corner tree on a soft snow drift, for depth.
       for (const side of ["l", "r"]) {
         const back = el("div", { className: `tree-far ${side}` }, box);
-        el("div", { className: `drift ${side}` }, box);
+        fars.push(back);
+        drifts.push(el("div", { className: `drift ${side}` }, box));
         el("img", { className: "tree-img", src: url("images/pine.webp"), alt: "" }, back);
       }
       trees = [createTree("l"), createTree("r")];
@@ -270,14 +271,17 @@ const Decor = (() => {
     box?.remove();
     box = null;
     trees = [];
+    fars = [];
+    drifts = [];
     wreathing = null;
     mx = my = -1;
   }
 
   function overTree(t) {
     const r = t.getBoundingClientRect();
-    const fullH = r.height / (t.classList.contains("back") ? 0.9 : 1);
-    const fullW = r.width / (t.classList.contains("back") ? 0.9 : 1);
+    const sc = t.classList.contains("back") && !t.classList.contains("tree-far") ? 0.9 : 1;
+    const fullH = r.height / sc;
+    const fullW = r.width / sc;
     const left = t.classList.contains("l") ? r.left : r.right - fullW;
     const top = r.bottom - fullH;
     if (mx < left || mx > left + fullW || my < top || my > r.bottom) return false;
@@ -286,7 +290,13 @@ const Decor = (() => {
   }
   function checkHover() {
     hoverRaf = 0;
-    for (const t of trees) t.classList.toggle("back", mx >= 0 && overTree(t));
+    // Pointer over either pine on a side: that whole corner (front tree, far tree, drift) steps back.
+    for (const side of ["l", "r"]) {
+      const group = [...trees, ...fars].filter((t) => t.classList.contains(side));
+      const over = mx >= 0 && group.some(overTree);
+      for (const t of group) t.classList.toggle("back", over);
+      drifts.find((d) => d.classList.contains(side))?.classList.toggle("back", over);
+    }
     if (wreathing) {
       // Fade the garland while the pointer is near it, so menus underneath stay easy to see.
       const W = window.innerWidth, H = window.innerHeight;
